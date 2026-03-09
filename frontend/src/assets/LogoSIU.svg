@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="100%" height="100%" viewBox="0 0 2048 2048" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+    <g transform="matrix(1,0,0,1,-31.0031,6.49731)">
+        <rect x="1007.5" y="218.806" width="33" height="348.773" style="fill:rgb(5,0,0);"/>
+    </g>
+    <g transform="matrix(1,0,0,1,-31.0031,1255.12)">
+        <rect x="1007.5" y="218.806" width="33" height="348.773" style="fill:rgb(5,0,0);"/>
+    </g>
+    <g transform="matrix(0.915803,0,0,0.915803,-628.15,84.1781)">
+        <text x="748.04px" y="1503.77px" style="font-family:'ChakraPetch-Bold', 'Chakra Petch';font-weight:700;font-size:1344.15px;">S</text>
+    </g>
+    <g transform="matrix(0.915803,0,0,0.915803,462.821,84.1781)">
+        <g transform="matrix(1344.15,0,0,1344.15,1688.94,1503.77)">
+        </g>
+        <text x="748.04px" y="1503.77px" style="font-family:'ChakraPetch-Bold', 'Chakra Petch';font-weight:700;font-size:1344.15px;">U</text>
+    </g>
+    <g transform="matrix(1.05089,0,0,1.05089,-83.1134,-28.2496)">
+        <circle cx="1024" cy="682.798" r="83.192"/>
+    </g>
+    <g transform="matrix(1,0,0,1,-31.0031,6.49731)">
+        <path d="M1024,1141.8L1014.53,1223.05L923.897,1223.05L923.897,1068.44L1124.1,1068.44L1124.1,1223.05L1033.46,1223.05L1024,1141.8Z"/>
+    </g>
+    <g transform="matrix(1,0,0,1,-31.0031,6.49731)">
+        <path d="M933.593,1272.52L1003.58,1272.52L993.206,1419.41L890.615,1457.05L890.615,1419.41L944.379,1382.51L933.593,1272.52Z"/>
+    </g>
+    <g transform="matrix(-1,0,0,1,2016.1,6.49731)">
+        <path d="M933.593,1272.52L1003.58,1272.52L993.206,1419.41L890.615,1457.05L890.615,1419.41L944.379,1382.51L933.593,1272.52Z"/>
+    </g>
+    <g transform="matrix(0.354246,0,0,0.354246,487.735,847.356)">
+        <path d="M1708.63,599.605L1143.97,599.605L1143.97,148.6L1107.19,148.6L1107.19,682.798C1107.19,728.713 1069.91,765.99 1024,765.99C978.085,765.99 940.808,728.713 940.808,682.798L940.808,56.502C940.808,56.502 938.918,-24.427 999.88,-87.586C1062.79,-152.764 1143.97,-153.981 1143.97,-153.981L1708.63,-153.981C1708.63,-153.981 1789.81,-152.764 1852.72,-87.586C1913.68,-24.427 1911.79,56.502 1911.79,56.502L1911.79,682.798C1911.79,728.713 1874.52,765.99 1828.6,765.99C1782.69,765.99 1745.41,728.713 1745.41,682.798L1745.41,148.6L1708.63,148.6L1708.63,599.605Z"/>
+    </g>
+</svg>

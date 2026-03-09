@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://someoneisunbeatable.de/</loc>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://someoneisunbeatable.de/login</loc>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://someoneisunbeatable.de/imprint</loc>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://someoneisunbeatable.de/privacy</loc>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://someoneisunbeatable.de/terms</loc>
+    <priority>0.3</priority>
+  </url>
+</urlset>

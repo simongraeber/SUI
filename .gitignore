@@ -1,0 +1,40 @@
+# Ignore macOS files
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python
+backend/venv/
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.pyc
+*.pyc
+
+# Node / Vite
+frontend/node_modules/
+frontend/dist/
+
+# Environment — never commit secrets
+.env
+.env.*
+!.env.example
+frontend/.env.*
+!frontend/.env.example
+
+# Google OAuth client secret files
+client_secret_*.json
+
+# Private deployment docs (contains credentials)
+PrivateDeplaymnetReadme.md
+
+# Docker
+pgdata/
+
+# Misc
+*.log
+group
