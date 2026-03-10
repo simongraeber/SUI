@@ -32,10 +32,13 @@ function PrivacyPage() {
         <p>
           We collect the data you provide when you register or use our services.
           For login purposes, we use an OAuth2 client that provides your unique
-          user identifier ('sub'). Information such as your name and profile
-          picture is processed only during the authentication process and is not
-          stored permanently – however, it may be visible to other participants
-          during an active session.
+          user identifier ('sub') along with your name, e-mail address, and
+          profile picture. This information is used to identify you within the
+          service and is <strong>visible to all members of any group you
+          join</strong> (e.g. on leaderboards, game history, and player
+          profiles). By joining a group you consent to sharing your name,
+          e-mail address, and profile picture with the other members of that
+          group.
         </p>
 
         <h2>4. Profile Images</h2>

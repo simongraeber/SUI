@@ -210,7 +210,6 @@ function LeaderboardPage() {
                     <HoverCardTrigger asChild>
                       <span
                         className="shrink-0 inline-flex items-center justify-center size-4 text-[9px] leading-none font-bold bg-muted text-muted-foreground rounded-full cursor-help"
-                        title="Provisional"
                         aria-label="Provisional rating"
                       >
                         P

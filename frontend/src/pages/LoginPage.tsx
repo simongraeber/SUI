@@ -160,6 +160,10 @@ function LoginPage() {
           By continuing you agree to our{" "}
           <Link to="/privacy" className="underline">
             Privacy Policy
+          </Link>{" "}
+          and{" "}
+          <Link to="/terms" className="underline">
+            Terms of Service
           </Link>
           .
         </motion.p>

@@ -963,6 +963,19 @@ function GamePage() {
                 >
                   {scoreA} – {scoreB} · {formatTime(elapsed)}
                 </motion.p>
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 }}
+                >
+                  <Link
+                    to={`/leaderboard/${groupId}`}
+                    className="gp-start-btn"
+                    style={{ display: "inline-block", textDecoration: "none", marginTop: 12 }}
+                  >
+                    Go to Leaderboard
+                  </Link>
+                </motion.div>
               </>
             )}
             {isCancelled && (

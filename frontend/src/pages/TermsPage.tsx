@@ -35,13 +35,20 @@ function TermsPage() {
           service. Do not upload images containing personal or sensitive data.
         </p>
 
-        <h2>5. Liability</h2>
+        <h2>5. Group Data Visibility</h2>
+        <p>
+          When you join a group, your display name, e-mail address, and profile
+          picture will be visible to all other members of that group. By joining
+          a group you agree to this sharing of information.
+        </p>
+
+        <h2>6. Liability</h2>
         <p>
           {company} is not liable for indirect or consequential damages arising
           from your use of the service.
         </p>
 
-        <h2>6. Changes</h2>
+        <h2>7. Changes</h2>
         <p>
           We may update these terms at any time. Continued use constitutes
           acceptance. Contact us at 80-read-crewel@icloud.com with questions.
