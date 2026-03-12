@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -281,60 +281,23 @@ function AIShimmerBorder({
   className?: string;
   children: React.ReactNode;
 }) {
-  const wrapperRef = useRef<HTMLDivElement>(null);
-
-  // JS-driven rotation — eased multi-wave motion for organic Apple feel
-  const rafRef = useRef<number>(0);
-  const startRef = useRef<number | null>(null);
-
-  const tick = useCallback((ts: number) => {
-    if (startRef.current === null) startRef.current = ts;
-    const t = (ts - startRef.current) / 1000; // seconds
-    // Layer two sine waves at different speeds for non-uniform, lush movement
-    const angle = (t * 90)                  // slow base drift (~4s per revolution)
-      + Math.sin(t * 1.2) * 30             // broad sway
-      + Math.sin(t * 2.7) * 15;            // faster shimmer ripple
-    wrapperRef.current?.style.setProperty("--shimmer-angle", `${angle % 360}deg`);
-    rafRef.current = requestAnimationFrame(tick);
-  }, []);
-
-  useEffect(() => {
-    if (active) {
-      rafRef.current = requestAnimationFrame(tick);
-    } else {
-      cancelAnimationFrame(rafRef.current);
-      startRef.current = null;
-    }
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [active, tick]);
+  // Rotation is done via CSS transform: rotate() on the gradient element
+  // (universally supported, no @property needed).
 
   return (
-    <div ref={wrapperRef} className={cn("relative", className)}>
+    <div className={cn("relative", className)}>
       {/* Glow — blurred gradient halo */}
       <div
-        className="absolute -inset-1 pointer-events-none transition-opacity duration-700"
-        style={{ opacity: active ? 0.45 : 0, willChange: "transform" }}
+        className="absolute inset-0 pointer-events-none transition-opacity duration-700 ai-shimmer-track ai-shimmer-glow"
+        style={{ opacity: active ? 0.45 : 0, "--shimmer-radius": "0.75rem" } as React.CSSProperties}
       >
-        <div
-          className="ai-shimmer ai-shimmer-glow size-full"
-          style={{ "--shimmer-radius": "0.875rem" } as React.CSSProperties}
-        />
-      </div>
-      {/* Gradient border */}
-      <div
-        className="absolute inset-0 transition-opacity duration-700"
-        style={{ opacity: active ? 1 : 0 }}
-      >
-        <div
-          className="ai-shimmer size-full"
-          style={{ "--shimmer-radius": "0.75rem" } as React.CSSProperties}
-        />
+        <div className="ai-shimmer ai-shimmer-spin" />
       </div>
       {/* Inner content */}
       <div
         className="relative bg-background transition-[border-color] duration-500 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 ring-offset-background"
         style={{
-          borderRadius: "calc(0.75rem - 2px)",
+          borderRadius: "0.7rem",
           margin: `${borderWidth}px`,
           border: "1px solid",
           borderColor: active ? "transparent" : "var(--input)",

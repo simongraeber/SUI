@@ -200,13 +200,31 @@ h1 {
     #f472b6, #e879f9, #a855f7, #6366f1,
     #3b82f6, #06b6d4, #34d399, #facc15,
     #fb923c, #f472b6;
-  background: conic-gradient(from var(--shimmer-angle, 0deg), var(--shimmer-colors));
+  background: conic-gradient(from 0deg, var(--shimmer-colors));
+}
+
+/* Container that clips the oversized spinning gradient */
+.ai-shimmer-track {
+  overflow: hidden;
   border-radius: var(--shimmer-radius, 0.75rem);
 }
 
+/* The gradient is a square sized to the parent's width so it covers all corners when rotated */
+.ai-shimmer-spin {
+  width: 150%;
+  aspect-ratio: 1;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  border-radius: 0;
+  animation: shimmer-rotate 4s linear infinite;
+}
+
+@keyframes shimmer-rotate {
+  to { transform: rotate(360deg); }
+}
+
 .ai-shimmer-glow {
-  position: relative;
   filter: blur(10px);
-  transform: translateZ(0);          /* Safari: own compositing layer → bypass border-radius clip */
-  -webkit-transform: translateZ(0);
 }
