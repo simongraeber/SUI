@@ -16,7 +16,8 @@ class Game(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     group_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("groups.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("groups.id", ondelete="CASCADE"), nullable=False,
+        index=True,
     )
     # idle | setup | active | paused | completed | cancelled
     state: Mapped[str] = mapped_column(String, nullable=False, default="setup")
@@ -46,13 +47,13 @@ class Game(Base):
         return self.elapsed
 
     # relationships
-    group = relationship("Group", lazy="joined")
+    group = relationship("Group", lazy="select")
     players: Mapped[list["GamePlayer"]] = relationship(
-        "GamePlayer", back_populates="game", cascade="all, delete-orphan", lazy="selectin"
+        "GamePlayer", back_populates="game", cascade="all, delete-orphan", lazy="raise"
     )
     goals: Mapped[list["GameGoal"]] = relationship(
         "GameGoal", back_populates="game", cascade="all, delete-orphan",
-        lazy="selectin", order_by="GameGoal.created_at"
+        lazy="raise", order_by="GameGoal.created_at"
     )
 
 
@@ -63,10 +64,12 @@ class GamePlayer(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     game_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("games.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("games.id", ondelete="CASCADE"), nullable=False,
+        index=True,
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False,
+        index=True,
     )
     side: Mapped[str] = mapped_column(String, nullable=False)  # "a" | "b"
 
@@ -82,10 +85,12 @@ class GameGoal(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     game_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("games.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("games.id", ondelete="CASCADE"), nullable=False,
+        index=True,
     )
     scored_by: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False,
+        index=True,
     )
     side: Mapped[str] = mapped_column(String, nullable=False)  # which side gets the point
     friendly_fire: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

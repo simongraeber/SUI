@@ -49,7 +49,8 @@ class GroupMember(Base):
         UUID(as_uuid=True), ForeignKey("groups.id", ondelete="CASCADE"), nullable=False
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False,
+        index=True,
     )
     joined_at = mapped_column(DateTime(timezone=True), server_default=func.now())
 

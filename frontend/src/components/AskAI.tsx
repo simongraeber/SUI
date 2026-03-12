@@ -313,7 +313,7 @@ function AIShimmerBorder({
       {/* Glow — blurred gradient halo */}
       <div
         className="absolute -inset-1 pointer-events-none transition-opacity duration-700"
-        style={{ opacity: active ? 0.45 : 0 }}
+        style={{ opacity: active ? 0.45 : 0, willChange: "transform" }}
       >
         <div
           className="ai-shimmer ai-shimmer-glow size-full"

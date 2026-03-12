@@ -46,13 +46,16 @@ class EloHistory(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     game_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("games.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("games.id", ondelete="CASCADE"), nullable=False,
+        index=True,
     )
     group_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("groups.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("groups.id", ondelete="CASCADE"), nullable=False,
+        index=True,
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False,
+        index=True,
     )
     elo_before: Mapped[float] = mapped_column(Float, nullable=False)
     elo_after: Mapped[float] = mapped_column(Float, nullable=False)

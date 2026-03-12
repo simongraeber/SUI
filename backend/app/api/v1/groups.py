@@ -2,14 +2,16 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+from collections import defaultdict
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user
 from app.database import get_db
-from app.models.game import Game, GamePlayer
+from app.models.game import Game, GameGoal, GamePlayer
 from app.models.group import Group, GroupMember
 from app.models.user import User
 from app.models.elo import PlayerRating, EloHistory
@@ -312,82 +314,103 @@ async def get_group_stats(
             "image_url": tm.user.image_url,
         }
 
-    # ── Fetch completed games for the period (or all for all-time) ──
-    games_query = (
-        select(Game)
-        .options(selectinload(Game.players), selectinload(Game.goals))
-        .where(Game.group_id == group_id, Game.state == "completed")
-    )
+    # ── Build base filter for completed games ──
+    games_filter = [Game.group_id == group_id, Game.state == "completed"]
     if period_start:
-        games_query = games_query.where(Game.created_at >= period_start)
+        games_filter.append(Game.created_at >= period_start)
     if period_end:
-        games_query = games_query.where(Game.created_at <= period_end)
-    games_query = games_query.order_by(Game.created_at.asc())
+        games_filter.append(Game.created_at <= period_end)
 
-    completed_games = await db.execute(games_query)
-    games = completed_games.scalars().all()
+    # ── Total games count ──
+    total_result = await db.execute(
+        select(func.count()).select_from(Game).where(*games_filter)
+    )
+    total_period_games = total_result.scalar() or 0
 
-    # ── Accumulate per-player stats from games ──
-    def _result(my_side: str, winner: str | None) -> str:
-        if winner is None:
-            return "D"
-        return "W" if winner == my_side else "L"
-
+    # ── Per-player wins / losses / games / goals_conceded (SQL aggregation) ──
+    wl_result = await db.execute(
+        select(
+            GamePlayer.user_id,
+            func.count().label("games_played"),
+            func.sum(case((Game.winner == GamePlayer.side, 1), else_=0)).label("wins"),
+            func.sum(case(
+                (and_(Game.winner.isnot(None), Game.winner != GamePlayer.side), 1),
+                else_=0,
+            )).label("losses"),
+            func.sum(
+                case((GamePlayer.side == "a", Game.score_b), else_=Game.score_a)
+            ).label("goals_conceded"),
+        )
+        .join(Game, Game.id == GamePlayer.game_id)
+        .where(*games_filter)
+        .group_by(GamePlayer.user_id)
+    )
     stats: dict[uuid.UUID, dict] = {}
-    total_period_games = 0
+    for row in wl_result.all():
+        stats[row.user_id] = {
+            "games_played": row.games_played,
+            "wins": int(row.wins or 0),
+            "losses": int(row.losses or 0),
+            "goals_conceded": int(row.goals_conceded or 0),
+            "goals_scored": 0,
+            "own_goals": 0,
+        }
 
-    for game in games:
-        total_period_games += 1
-        side_a = [gp for gp in game.players if gp.side == "a"]
-        side_b = [gp for gp in game.players if gp.side == "b"]
-        all_gp = side_a + side_b
+    # ── Goals scored / own goals (SQL aggregation) ──
+    goals_result = await db.execute(
+        select(
+            GameGoal.scored_by,
+            func.sum(case((GameGoal.friendly_fire == False, 1), else_=0)).label("goals_scored"),
+            func.sum(case((GameGoal.friendly_fire == True, 1), else_=0)).label("own_goals"),
+        )
+        .join(Game, Game.id == GameGoal.game_id)
+        .where(*games_filter)
+        .group_by(GameGoal.scored_by)
+    )
+    for row in goals_result.all():
+        if row.scored_by in stats:
+            stats[row.scored_by]["goals_scored"] = int(row.goals_scored or 0)
+            stats[row.scored_by]["own_goals"] = int(row.own_goals or 0)
 
-        # Init players found in games but maybe not in member list
-        for gp in all_gp:
-            if gp.user_id not in player_info:
-                player_info[gp.user_id] = {
-                    "name": gp.user.name if gp.user else "Former member",
-                    "image_url": gp.user.image_url if gp.user else None,
-                }
+    # ── Form & streak from last 100 games (bounded) ──
+    recent_game_ids = (
+        select(Game.id)
+        .where(*games_filter)
+        .order_by(Game.created_at.desc())
+        .limit(100)
+    )
+    recent_result = await db.execute(
+        select(
+            GamePlayer.user_id,
+            GamePlayer.side,
+            Game.winner,
+            Game.created_at,
+        )
+        .join(Game, Game.id == GamePlayer.game_id)
+        .where(Game.id.in_(recent_game_ids))
+        .order_by(Game.created_at.desc())
+    )
+    recent_per_player: dict[uuid.UUID, list] = defaultdict(list)
+    for uid, side, winner, created_at in recent_result.all():
+        if winner is None:
+            game_result = "D"
+        elif winner == side:
+            game_result = "W"
+        else:
+            game_result = "L"
+        recent_per_player[uid].append((created_at, game_result))
 
-        for gp in all_gp:
-            if gp.user_id not in stats:
-                stats[gp.user_id] = {
-                    "games_played": 0,
-                    "wins": 0,
-                    "losses": 0,
-                    "goals_scored": 0,
-                    "goals_conceded": 0,
-                    "own_goals": 0,
-                    "recent_results": [],
-                }
-
-        for gp in side_a:
-            s = stats[gp.user_id]
-            s["games_played"] += 1
-            if game.winner == "a":
-                s["wins"] += 1
-            elif game.winner == "b":
-                s["losses"] += 1
-            s["goals_conceded"] += game.score_b
-            s["recent_results"].append((game.created_at, _result("a", game.winner)))
-
-        for gp in side_b:
-            s = stats[gp.user_id]
-            s["games_played"] += 1
-            if game.winner == "b":
-                s["wins"] += 1
-            elif game.winner == "a":
-                s["losses"] += 1
-            s["goals_conceded"] += game.score_a
-            s["recent_results"].append((game.created_at, _result("b", game.winner)))
-
-        for goal in game.goals:
-            if goal.scored_by in stats:
-                if goal.friendly_fire:
-                    stats[goal.scored_by]["own_goals"] += 1
-                else:
-                    stats[goal.scored_by]["goals_scored"] += 1
+    # ── Fetch info for players in stats but not in member list ──
+    missing_ids = set(stats.keys()) - set(player_info.keys())
+    if missing_ids:
+        users_result = await db.execute(
+            select(User).where(User.id.in_(missing_ids))
+        )
+        for u in users_result.scalars().all():
+            player_info[u.id] = {"name": u.name, "image_url": u.image_url}
+        for uid in missing_ids:
+            if uid not in player_info:
+                player_info[uid] = {"name": "Former member", "image_url": None}
 
     # ── Build final player list ──
     players = []
@@ -398,7 +421,7 @@ async def get_group_stats(
         gpg = round(s["goals_scored"] / gp_count, 1) if gp_count > 0 else 0.0
 
         # Form: last 5 results sorted by date desc
-        recent = sorted(s["recent_results"], key=lambda x: x[0], reverse=True)
+        recent = sorted(recent_per_player.get(uid, []), key=lambda x: x[0], reverse=True)
         form = [r[1] for r in recent[:5]]
 
         # Streak
@@ -406,8 +429,8 @@ async def get_group_stats(
         if recent:
             first = recent[0][1]
             count = 0
-            for _, result in recent:
-                if result == first:
+            for _, game_result in recent:
+                if game_result == first:
                     count += 1
                 else:
                     break
