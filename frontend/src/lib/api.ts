@@ -315,3 +315,26 @@ export async function generateAIImage(file: File): Promise<{ blob: Blob; imageId
   const blob = await res.blob();
   return { blob, imageId };
 }
+
+/* ── AI Ask ── */
+export type AIComponent =
+  | { type: "ranked-list"; icon: string; title: string; items: { label: string; value: string; image_urls?: string[] }[] }
+  | { type: "stat-highlight"; icon: string; label: string; value: string; subtitle?: string; image_urls?: string[] }
+  | { type: "comparison"; title: string; sides: { name: string; image_urls?: string[]; stats: { label: string; value: string }[] }[] }
+  | { type: "bar-chart"; title: string; bars: { label: string; value: number; image_urls?: string[] }[] }
+  | { type: "table"; title: string; columns: string[]; rows: Record<string, string>[] }
+  | { type: "callout"; emoji: string; text: string }
+  | { type: "head-to-head"; player_a: { name: string; image_urls?: string[] }; player_b: { name: string; image_urls?: string[] }; stats: { label: string; a: string; b: string }[] };
+
+export interface AskResponse {
+  answer: string;
+  components: AIComponent[];
+  remaining: number;
+}
+
+export async function askQuestion(groupId: string, question: string) {
+  return request<AskResponse>(`/groups/${groupId}/ask`, {
+    method: "POST",
+    body: JSON.stringify({ question }),
+  });
+}

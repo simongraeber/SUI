@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
+import { FormDots, eloColor } from "@/components/FormDots";
 import { useAuth } from "@/lib/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,27 +21,7 @@ import {
   type GroupMember,
 } from "@/lib/api";
 
-/* ── Form dots ── */
-function FormDots({ form }: { form: string[] }) {
-  if (!form.length) return <span className="text-muted-foreground text-sm">—</span>;
-  return (
-    <div className="flex gap-1 items-center">
-      {form.map((r, i) => (
-        <span
-          key={i}
-          className={`inline-block size-3 rounded-full ${
-            r === "W"
-              ? "bg-green-500"
-              : r === "L"
-                ? "bg-red-500"
-                : "bg-gray-300 dark:bg-gray-600"
-          }`}
-          title={r === "W" ? "Win" : "Loss"}
-        />
-      ))}
-    </div>
-  );
-}
+
 
 /* ── Stat row helper ── */
 function StatRow({ label, value, color }: { label: string; value: string | number; color?: string }) {
@@ -70,12 +51,7 @@ function AnimatedNumber({ value }: { value: number }) {
   return <span>{current}</span>;
 }
 
-/* ── Elo badge color ── */
-function eloColor(elo: number): string {
-  if (elo >= 1100) return "text-green-600 dark:text-green-400";
-  if (elo < 900) return "text-red-500";
-  return "";
-}
+
 
 function PlayerPage() {
   const { groupId, memberId: userId } = useParams<{ groupId: string; memberId: string }>();
@@ -228,7 +204,7 @@ function PlayerPage() {
           <Separator className="my-2" />
           <div className="flex justify-between items-center py-1.5">
             <span className="text-sm text-muted-foreground">Form</span>
-            <FormDots form={player.form} />
+            <FormDots form={player.form} size="md" />
           </div>
           {player.streak && (
             <StatRow

@@ -12,6 +12,7 @@ from app.database import get_db
 from app.models.game import Game
 from app.models.group import Group, GroupMember
 from app.models.user import User
+from app.models.elo import PlayerRating, EloHistory
 from app.schemas.group import (
     PlayerStatsResponse,
     GroupCreate,
@@ -232,7 +233,7 @@ async def get_group_stats(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get leaderboard with on-the-fly Elo computation."""
+    """Get leaderboard — reads Elo from player_ratings / elo_history."""
     await _assert_membership(group_id, user, db)
     await _get_group_or_404(group_id, db)
 
@@ -255,14 +256,37 @@ async def get_group_stats(
     if period_start or period_end:
         period_label = "Custom"
 
-    # ── Fetch ALL completed games chronologically (needed for Elo) ──
-    completed_games = await db.execute(
-        select(Game)
-        .options(selectinload(Game.players), selectinload(Game.goals))
-        .where(Game.group_id == group_id, Game.state == "completed")
-        .order_by(Game.created_at.asc())
+    is_period = period_start is not None or period_end is not None
+
+    # ── Read current Elo ratings from player_ratings ──
+    ratings_result = await db.execute(
+        select(PlayerRating).where(PlayerRating.group_id == group_id)
     )
-    games = completed_games.scalars().all()
+    elo_map: dict[uuid.UUID, tuple[float, int, bool]] = {}
+    for pr in ratings_result.scalars().all():
+        elo_map[pr.user_id] = (pr.elo, pr.games_played, pr.provisional)
+
+    # ── Compute elo_delta for period from elo_history ──
+    elo_delta_map: dict[uuid.UUID, float] = {}
+    if is_period:
+        # Sum deltas for games within the period
+        delta_query = (
+            select(EloHistory.user_id, func.sum(EloHistory.delta))
+            .join(Game, Game.id == EloHistory.game_id)
+            .where(
+                EloHistory.group_id == group_id,
+                Game.state == "completed",
+            )
+        )
+        if period_start:
+            delta_query = delta_query.where(Game.created_at >= period_start)
+        if period_end:
+            delta_query = delta_query.where(Game.created_at <= period_end)
+        delta_query = delta_query.group_by(EloHistory.user_id)
+
+        delta_result = await db.execute(delta_query)
+        for uid, total_delta in delta_result.all():
+            elo_delta_map[uid] = total_delta or 0.0
 
     # ── Seed player info from group members ──
     members_result = await db.execute(
@@ -275,92 +299,44 @@ async def get_group_stats(
             "image_url": tm.user.image_url,
         }
 
-    # ── Walk all games: compute Elo + accumulate period stats ──
-    elo: dict[uuid.UUID, float] = {}
-    games_counted: dict[uuid.UUID, int] = {}
-    elo_at_period_start: dict[uuid.UUID, float] = {}
+    # ── Fetch completed games for the period (or all for all-time) ──
+    games_query = (
+        select(Game)
+        .options(selectinload(Game.players), selectinload(Game.goals))
+        .where(Game.group_id == group_id, Game.state == "completed")
+    )
+    if period_start:
+        games_query = games_query.where(Game.created_at >= period_start)
+    if period_end:
+        games_query = games_query.where(Game.created_at <= period_end)
+    games_query = games_query.order_by(Game.created_at.asc())
 
-    # Period-only stats
-    stats: dict[uuid.UUID, dict] = {}
-    total_period_games = 0
+    completed_games = await db.execute(games_query)
+    games = completed_games.scalars().all()
 
-    def _k_factor(n: int) -> int:
-        if n < 10:
-            return 40
-        if n < 20:
-            return 32
-        return 24
-
-    def _in_range(dt: datetime) -> bool:
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        if period_start and dt < period_start:
-            return False
-        if period_end and dt > period_end:
-            return False
-        return True
-
+    # ── Accumulate per-player stats from games ──
     def _result(my_side: str, winner: str | None) -> str:
         if winner is None:
             return "D"
         return "W" if winner == my_side else "L"
 
+    stats: dict[uuid.UUID, dict] = {}
+    total_period_games = 0
+
     for game in games:
+        total_period_games += 1
         side_a = [gp for gp in game.players if gp.side == "a"]
         side_b = [gp for gp in game.players if gp.side == "b"]
         all_gp = side_a + side_b
 
-        # Init new players
+        # Init players found in games but maybe not in member list
         for gp in all_gp:
-            if gp.user_id not in elo:
-                elo[gp.user_id] = 1000.0
-                games_counted[gp.user_id] = 0
             if gp.user_id not in player_info:
                 player_info[gp.user_id] = {
                     "name": gp.user.name if gp.user else "Former member",
                     "image_url": gp.user.image_url if gp.user else None,
                 }
 
-        # ── Elo calculation (always, full history) ──
-        team_avg_a = (sum(elo[p.user_id] for p in side_a) / len(side_a)) if side_a else 1000.0
-        team_avg_b = (sum(elo[p.user_id] for p in side_b) / len(side_b)) if side_b else 1000.0
-
-        e_a = 1.0 / (1.0 + 10 ** ((team_avg_b - team_avg_a) / 400.0))
-        e_b = 1.0 - e_a
-
-        if game.winner == "a":
-            s_a, s_b = 1.0, 0.0
-        elif game.winner == "b":
-            s_a, s_b = 0.0, 1.0
-        else:
-            s_a, s_b = 0.5, 0.5
-
-        goal_diff = abs(game.score_a - game.score_b)
-        mov = 1.0 + 0.5 * (goal_diff / (goal_diff + 3.0)) if goal_diff > 0 else 1.0
-
-        for gp in side_a:
-            k = _k_factor(games_counted[gp.user_id])
-            delta = k * mov * (s_a - e_a)
-            elo[gp.user_id] += delta
-            games_counted[gp.user_id] += 1
-
-        for gp in side_b:
-            k = _k_factor(games_counted[gp.user_id])
-            delta = k * mov * (s_b - e_b)
-            elo[gp.user_id] += delta
-            games_counted[gp.user_id] += 1
-
-        # ── Check if game is in period ──
-        in_period = _in_range(game.created_at)
-
-        if not in_period:
-            for gp in all_gp:
-                elo_at_period_start[gp.user_id] = elo[gp.user_id]
-            continue
-
-        total_period_games += 1
-
-        # ── Accumulate stats for period ──
         for gp in all_gp:
             if gp.user_id not in stats:
                 stats[gp.user_id] = {
@@ -372,8 +348,6 @@ async def get_group_stats(
                     "own_goals": 0,
                     "recent_results": [],
                 }
-                if gp.user_id not in elo_at_period_start:
-                    elo_at_period_start[gp.user_id] = elo[gp.user_id]
 
         for gp in side_a:
             s = stats[gp.user_id]
@@ -426,9 +400,16 @@ async def get_group_stats(
                     break
             streak = {"type": first, "count": count}
 
-        player_elo = round(elo.get(uid, 1000.0))
-        elo_delta = round(elo.get(uid, 1000.0) - elo_at_period_start.get(uid, 1000.0))
-        provisional = games_counted.get(uid, 0) < 10
+        # Elo from player_ratings table
+        elo_data = elo_map.get(uid)
+        player_elo = round(elo_data[0]) if elo_data else 1000
+        provisional = elo_data[2] if elo_data else True
+
+        # Elo delta: for period view use elo_history sum; for all-time use total change from 1000
+        if is_period:
+            elo_delta = round(elo_delta_map.get(uid, 0.0))
+        else:
+            elo_delta = player_elo - 1000
 
         info = player_info.get(uid, {"name": "Unknown", "image_url": None})
 
@@ -453,7 +434,6 @@ async def get_group_stats(
         ))
 
     # Default sort: Elo desc for all-time, Elo delta desc for period
-    is_period = period_start is not None or period_end is not None
     if is_period:
         players.sort(key=lambda p: (p.elo_delta, p.win_rate, p.goal_diff), reverse=True)
     else:

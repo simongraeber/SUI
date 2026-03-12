@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 24 * 7  # 7 days
 
+    # Read-only DB
+    database_url_readonly: str = ""
+
     # CORS
     cors_origins: list[str] = ["http://localhost:5173"]
 

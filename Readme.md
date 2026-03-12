@@ -54,6 +54,7 @@ Copy `.env.example` → `.env` and fill in the values:
 | `JWT_SECRET` | Signing key for JWTs — generate with `openssl rand -hex 32` |
 | `CORS_ORIGINS` | JSON array of allowed origins |
 | `GEMINI_API_KEY` | Google Gemini API key (for AI avatar generation) |
+| `DATABASE_URL_READONLY` | (Optional) Separate read-only DB connection URL for the query endpoint |
 | `POSTGRES_PASSWORD` | Database password (used in production compose) |
 
 The frontend needs its own env file (`frontend/.env.example` → `frontend/.env.development`):
@@ -116,6 +117,7 @@ The frontend needs its own env file (`frontend/.env.example` → `frontend/.env.
 │               ├── users.py        # User profile CRUD
 │               ├── groups.py       # Group CRUD, invites, memberships
 │               ├── games.py        # Game lifecycle + goals + leaderboard
+│               ├── query.py        # Read-only SQL query endpoint
 │               └── images.py       # Image upload/retrieval (Gemini avatars)
 │
 └── frontend/
@@ -206,6 +208,50 @@ SETUP ──→ ACTIVE ←──→ PAUSED
 
 - First to **10 points**, must win by **at least 2**
 - Valid final scores: 10-0 … 10-8, 11-9, 12-10, …
+
+### Custom SQL Queries
+
+Users can run **read-only** SQL queries against their own group's data via `POST /api/v1/groups/{group_id}/query`.
+
+**Available tables** (automatically scoped to the caller's group):
+
+| Table | Columns |
+|---|---|
+| `games` | id, state, score_a, score_b, elapsed, winner, goal_count, created_by, created_at, started_at |
+| `game_players` | id, game_id, user_id, side |
+| `game_goals` | id, game_id, scored_by, side, friendly_fire, elapsed_at, created_at |
+| `users` | id, name, image_url |
+
+**Example queries:**
+
+```sql
+-- Who has the most friendly-fire goals?
+SELECT u.name, COUNT(*) AS own_goals
+FROM game_goals gg
+JOIN users u ON u.id = gg.scored_by
+WHERE gg.friendly_fire = true
+GROUP BY u.name
+ORDER BY own_goals DESC
+
+-- Best team combination (most wins)
+SELECT p1.name || ' & ' || p2.name AS team, COUNT(*) AS wins
+FROM games g
+JOIN game_players gp1 ON gp1.game_id = g.id
+JOIN game_players gp2 ON gp2.game_id = g.id AND gp1.user_id < gp2.user_id AND gp1.side = gp2.side
+JOIN users p1 ON p1.id = gp1.user_id
+JOIN users p2 ON p2.id = gp2.user_id
+WHERE g.state = 'completed' AND g.winner = gp1.side
+GROUP BY team
+ORDER BY wins DESC
+```
+
+**Security model:**
+- Queries run in a PostgreSQL `READ ONLY` transaction — writes are impossible
+- A CTE preamble shadows all table names so only the caller's group data is visible
+- Sensitive columns (email, google_id) are never exposed
+- A 5-second statement timeout prevents expensive queries
+- Results are capped at 1 000 rows
+- Optionally configure `DATABASE_URL_READONLY` to use a DB user with only `SELECT` privileges
 
 ### Leaderboard Sorting
 

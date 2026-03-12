@@ -11,6 +11,7 @@ from app.database import get_db
 from app.models.game import Game, GameGoal, GamePlayer
 from app.models.group import GroupMember
 from app.models.user import User
+from app.services.elo import update_elo_for_game
 from app.schemas.game import (
     GameCreate,
     GameGoalCreate,
@@ -304,6 +305,10 @@ async def update_game(
     if body.winner is not None:
         game.winner = body.winner
 
+    # Trigger Elo update if game just completed
+    if game.state == "completed" and game.winner is not None:
+        await update_elo_for_game(game, db)
+
     await db.commit()
     await db.refresh(game)
 
@@ -359,14 +364,27 @@ async def record_goal(
         game.score_a >= score_threshold
         and game.score_a - game.score_b >= win_margin
     ):
-        game.state = "completed"
         game.winner = "a"
     elif (
         game.score_b >= score_threshold
         and game.score_b - game.score_a >= win_margin
     ):
-        game.state = "completed"
         game.winner = "b"
+
+    # If a winner was determined, finalize elapsed and complete the game
+    if game.winner is not None:
+        now = datetime.now(timezone.utc)
+        if game.started_at is not None:
+            sa = game.started_at
+            if sa.tzinfo is None:
+                sa = sa.replace(tzinfo=timezone.utc)
+            game.elapsed += int((now - sa).total_seconds())
+            game.started_at = None
+        game.state = "completed"
+
+    # Trigger Elo update if game just completed
+    if game.state == "completed" and game.winner is not None:
+        await update_elo_for_game(game, db)
 
     await db.commit()
 

@@ -193,3 +193,18 @@ h1 {
   .logo-dark { display: inline; }
   .logo-light { display: none; }
 }
+
+/* ── Apple AI Shimmer ── */
+.ai-shimmer {
+  --shimmer-angle: 0deg;
+  --shimmer-colors:
+    #f472b6, #e879f9, #a855f7, #6366f1,
+    #3b82f6, #06b6d4, #34d399, #facc15,
+    #fb923c, #f472b6;
+  background: conic-gradient(from var(--shimmer-angle), var(--shimmer-colors));
+  border-radius: var(--shimmer-radius, 0.75rem);
+}
+
+.ai-shimmer-glow {
+  filter: blur(10px);
+}

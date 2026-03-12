@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
+import { FormDots, eloColor } from "@/components/FormDots";
 import { motion } from "framer-motion";
 import { type ColumnDef } from "@tanstack/react-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,6 +29,7 @@ import {
 } from "lucide-react";
 import PageTransition from "@/components/PageTransition";
 import LoadingState from "@/components/LoadingState";
+import AskAI from "@/components/AskAI";
 import { staggerContainer, fadeUp } from "@/lib/animations";
 import {
   getGroupStats,
@@ -112,34 +114,7 @@ function InfoTooltip() {
   );
 }
 
-/* ── Form dots ── */
-function FormDots({ form }: { form: string[] }) {
-  if (!form.length) return <span className="text-muted-foreground">—</span>;
-  return (
-    <div className="flex gap-0.5 items-center justify-center">
-      {form.map((r, i) => (
-        <span
-          key={i}
-          className={`inline-block size-2.5 rounded-full ${
-            r === "W"
-              ? "bg-green-500"
-              : r === "L"
-                ? "bg-red-500"
-                : "bg-gray-300 dark:bg-gray-600"
-          }`}
-          title={r === "W" ? "Win" : "Loss"}
-        />
-      ))}
-    </div>
-  );
-}
 
-/* ── Elo badge color ── */
-function eloColor(elo: number): string {
-  if (elo >= 1100) return "text-green-600 dark:text-green-400";
-  if (elo < 900) return "text-red-500";
-  return "";
-}
 
 /* ── Main component ── */
 function LeaderboardPage() {
@@ -602,6 +577,9 @@ function LeaderboardPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* ── Ask AI ── */}
+      {groupId && <AskAI groupId={groupId} />}
 
       <div className="flex flex-wrap justify-center gap-3 mt-6">
         <Button variant="outline" asChild>
