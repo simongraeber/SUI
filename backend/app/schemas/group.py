@@ -20,6 +20,7 @@ class GroupMemberResponse(BaseModel):
     email: str
     image_url: str | None = None
     joined_at: datetime
+    last_played_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 

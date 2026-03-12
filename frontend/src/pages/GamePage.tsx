@@ -45,6 +45,16 @@ function formatTime(seconds: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+/** Sort members by last_played_at descending (most recent first), never-played last. */
+function sortByRecency(members: GroupMemberType[]): GroupMemberType[] {
+  return [...members].sort((a, b) => {
+    if (!a.last_played_at && !b.last_played_at) return 0;
+    if (!a.last_played_at) return 1;
+    if (!b.last_played_at) return -1;
+    return new Date(b.last_played_at).getTime() - new Date(a.last_played_at).getTime();
+  });
+}
+
 /* ── animation variants ── */
 const fadeIn = pageVariants;
 
@@ -171,11 +181,11 @@ function GamePage() {
             .filter(Boolean) as GroupMemberType[];
           setSideA(sA);
           setSideB(sB);
-          setUnassigned(groupData.members.filter((m) => !assignedIds.has(m.user_id)));
+          setUnassigned(sortByRecency(groupData.members.filter((m) => !assignedIds.has(m.user_id))));
 
           setPhase(activeGame.state as PagePhase);
         } else {
-          setUnassigned(groupData.members);
+          setUnassigned(sortByRecency(groupData.members));
           setPhase("setup");
         }
       } catch {

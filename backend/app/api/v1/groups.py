@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user
 from app.database import get_db
-from app.models.game import Game
+from app.models.game import Game, GamePlayer
 from app.models.group import Group, GroupMember
 from app.models.user import User
 from app.models.elo import PlayerRating, EloHistory
@@ -134,6 +134,18 @@ async def get_group(
     )
     group = result.scalar_one()
 
+    # Fetch each member's most recent game in this group
+    lp_result = await db.execute(
+        select(
+            GamePlayer.user_id,
+            func.max(Game.updated_at).label("last_played_at"),
+        )
+        .join(Game, GamePlayer.game_id == Game.id)
+        .where(Game.group_id == group_id, Game.state != "cancelled")
+        .group_by(GamePlayer.user_id)
+    )
+    last_played_map = {row.user_id: row.last_played_at for row in lp_result.all()}
+
     members = [
         GroupMemberResponse(
             user_id=m.user.id,
@@ -141,6 +153,7 @@ async def get_group(
             email=m.user.email,
             image_url=m.user.image_url,
             joined_at=m.joined_at,
+            last_played_at=last_played_map.get(m.user_id),
         )
         for m in group.members
     ]

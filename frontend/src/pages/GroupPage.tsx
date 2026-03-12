@@ -86,7 +86,7 @@ function GroupPage() {
             <p className="text-muted-foreground italic">No members to display.</p>
           ) : (
             <ul className="space-y-3">
-              {group.members.map((m) => (
+              {[...group.members].sort((a, b) => a.name.localeCompare(b.name)).map((m) => (
                 <li key={m.user_id}>
                   <Link
                     to={`/group/${groupId}/member/${m.user_id}`}

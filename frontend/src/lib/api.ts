@@ -93,6 +93,7 @@ export interface GroupMember {
   email: string;
   image_url: string | null;
   joined_at: string;
+  last_played_at: string | null;
 }
 
 export interface GroupDetail extends GroupSummary {
