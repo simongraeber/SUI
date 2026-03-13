@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,9 +13,6 @@ import { askQuestion, resolveImageUrl, type AskResponse, type AIComponent, ApiEr
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
-/** Card wrapper for AI answer components — uses bg-background so the
- *  border-border is visible against the parent Card's bg-card, matching
- *  the same contrast the leaderboard Card has on the page. */
 function AICard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
     <div className={`rounded-2xl border border-border bg-background text-card-foreground shadow-sm ${className}`}>
@@ -281,9 +278,6 @@ function AIShimmerBorder({
   className?: string;
   children: React.ReactNode;
 }) {
-  // Rotation is done via CSS transform: rotate() on the gradient element
-  // (universally supported, no @property needed).
-
   return (
     <div className={cn("relative", className)}>
       {/* Glow — blurred gradient halo */}
@@ -338,12 +332,15 @@ function AskAI({ groupId }: { groupId: string }) {
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const [resultKey, setResultKey] = useState(0);
+
   const handleAsk = async (q?: string) => {
     const text = (q ?? question).trim();
     if (!text || loading) return;
     setLoading(true);
     setError(null);
     setResult(null);
+    setResultKey((k) => k + 1);
     try {
       const res = await askQuestion(groupId, text);
       setResult(res);
@@ -390,7 +387,7 @@ function AskAI({ groupId }: { groupId: string }) {
               maxLength={500}
               className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
             />
-            <Button type="submit" disabled={loading || !question.trim()} size="icon" className="shrink-0">
+            <Button type="submit" disabled={loading || !question.trim()} size="icon" className="shrink-0" aria-label="Send question">
               {loading ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
@@ -430,22 +427,30 @@ function AskAI({ groupId }: { groupId: string }) {
         </AnimatePresence>
 
         {/* Result */}
-        <AnimatePresence>
+        <AnimatePresence mode="wait">
           {result && (
             <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
+              key={resultKey}
+              initial={{ opacity: 0, y: 16, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.97, transition: { duration: 0.2 } }}
+              transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
               className="space-y-3"
             >
               {/* Answer text — only shown when there are no components */}
               {result.components.length === 0 && (
-                <AICard className="px-4 py-3">
-                  <div className="flex items-start gap-2">
-                    <Sparkles className="size-4 text-purple-500 mt-0.5 shrink-0" />
-                    <p className="text-sm leading-relaxed text-foreground">{result.answer}</p>
-                  </div>
-                </AICard>
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ delay: 0.05, duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
+                >
+                  <AICard className="px-4 py-3">
+                    <div className="flex items-start gap-2">
+                      <Sparkles className="size-4 text-purple-500 mt-0.5 shrink-0" />
+                      <p className="text-sm leading-relaxed text-foreground">{result.answer}</p>
+                    </div>
+                  </AICard>
+                </motion.div>
               )}
 
               {/* Generated components */}
@@ -454,9 +459,13 @@ function AskAI({ groupId }: { groupId: string }) {
                   {result.components.map((comp, i) => (
                     <motion.div
                       key={i}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.1 }}
+                      initial={{ opacity: 0, y: 12, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      transition={{
+                        delay: i * 0.08,
+                        duration: 0.35,
+                        ease: [0.25, 0.46, 0.45, 0.94],
+                      }}
                       className={
                         ["table", "head-to-head", "comparison", "bar-chart"].includes(comp.type)
                           ? "sm:col-span-2" : ""
@@ -469,13 +478,18 @@ function AskAI({ groupId }: { groupId: string }) {
               )}
 
               {/* Rate limit + disclaimer */}
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>AI can make mistakes — verify important stats.</span>
-                <span>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: result.components.length * 0.08 + 0.15, duration: 0.3 }}
+                className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-muted-foreground"
+              >
+                <span className="whitespace-nowrap">AI can make mistakes — verify important stats.</span>
+                <span className="whitespace-nowrap">
                   {result.remaining} question{result.remaining !== 1 ? "s" : ""}{" "}
                   remaining this hour
                 </span>
-              </div>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>

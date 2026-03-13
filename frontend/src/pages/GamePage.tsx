@@ -9,6 +9,7 @@ import {
   updateGame,
   getGame,
   recordGoal,
+  deleteGoal,
   resolveImageUrl,
   type GroupDetail,
   type GroupMember as GroupMemberType,
@@ -406,15 +407,25 @@ function GamePage() {
   const undoGoal = useCallback(
     async (side: Side) => {
       if (phase !== "active" || !groupId || !gameId) return;
+
+      // Find the last goal on the given side to delete
+      const lastGame = await getGame(groupId, gameId);
+      const sideGoals = lastGame.goals.filter((g) => g.side === side);
+      const lastGoal = sideGoals[sideGoals.length - 1];
+      if (!lastGoal) return;
+
+      // Optimistic UI update
       const newA = side === "a" ? Math.max(0, scoreA - 1) : scoreA;
       const newB = side === "b" ? Math.max(0, scoreB - 1) : scoreB;
       setScoreA(newA);
       setScoreB(newB);
+
       try {
-        await updateGame(groupId, gameId, {
-          score_a: newA,
-          score_b: newB,
-        });
+        const g = await deleteGoal(groupId, gameId, lastGoal.id);
+        goalCountRef.current = g.goal_count;
+        setRemoteGoalCount(g.goal_count);
+        setScoreA(g.score_a);
+        setScoreB(g.score_b);
       } catch (e) {
         console.error("Failed to undo goal:", e);
       }

@@ -567,10 +567,16 @@ function LeaderboardPage() {
                   }
                 />
                 <p className="text-xs text-muted-foreground mt-3">
-                  GP = Games Played · W = Wins · L = Losses ·
-                  Win% = Win Rate · GS = Goals Scored · GC = Goals Conceded ·
-                  GD = Goal Difference
-                  {isPeriod && " · ±Δ = Elo Change"}
+                  <span className="whitespace-nowrap">GP = Games Played</span>{" · "}
+                  <span className="whitespace-nowrap">W = Wins</span>{" · "}
+                  <span className="whitespace-nowrap">L = Losses</span>{" · "}
+                  <span className="whitespace-nowrap">Win% = Win Rate</span>{" · "}
+                  <span className="whitespace-nowrap">GS = Goals Scored</span>{" · "}
+                  <span className="whitespace-nowrap">GC = Goals Conceded</span>{" · "}
+                  <span className="whitespace-nowrap">GD = Goal Difference</span>
+                  {isPeriod && (
+                    <>{" · "}<span className="whitespace-nowrap">±Δ = Elo Change</span></>
+                  )}
                 </p>
               </>
             )}

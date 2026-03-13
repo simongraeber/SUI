@@ -172,7 +172,7 @@ async def list_games(
             state=g.state,
             score_a=g.score_a,
             score_b=g.score_b,
-            elapsed=g.elapsed,
+            elapsed=g.computed_elapsed,
             winner=g.winner,
             created_at=g.created_at,
         )
@@ -386,6 +386,50 @@ async def record_goal(
     if game.state == "completed" and game.winner is not None:
         await update_elo_for_game(game, db)
 
+    await db.commit()
+
+    # Re-fetch with relationships
+    game = await _get_game_or_404(game_id, group_id, db)
+    return _build_response(game)
+
+
+@router.delete(
+    "/{game_id}/goals/{goal_id}",
+    response_model=GameResponse,
+)
+async def delete_goal(
+    group_id: uuid.UUID,
+    game_id: uuid.UUID,
+    goal_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Undo a goal: remove the GameGoal record and adjust score/goal_count."""
+    await _assert_group_membership(group_id, user, db)
+    game = await _get_game_or_404(game_id, group_id, db)
+
+    if game.state not in ("active", "paused"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Goals can only be removed while the game is active or paused",
+        )
+
+    # Find the goal
+    goal = next((g for g in game.goals if g.id == goal_id), None)
+    if goal is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found"
+        )
+
+    # Adjust score
+    if goal.side == "a":
+        game.score_a = max(0, game.score_a - 1)
+    else:
+        game.score_b = max(0, game.score_b - 1)
+
+    game.goal_count = max(0, game.goal_count - 1)
+
+    await db.delete(goal)
     await db.commit()
 
     # Re-fetch with relationships

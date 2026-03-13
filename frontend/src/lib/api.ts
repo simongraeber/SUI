@@ -297,6 +297,17 @@ export async function recordGoal(
   });
 }
 
+export async function deleteGoal(
+  groupId: string,
+  gameId: string,
+  goalId: string,
+) {
+  return request<GameResponse>(
+    `/groups/${groupId}/games/${gameId}/goals/${goalId}`,
+    { method: "DELETE" },
+  );
+}
+
 /* ── AI Image ── */
 export async function generateAIImage(file: File): Promise<{ blob: Blob; imageId: string }> {
   const form = new FormData();
