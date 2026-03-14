@@ -1,6 +1,6 @@
 const DesignedWithLoveAnimation = () => {
   return (
-    <div style={{ width: "100%", maxWidth: "800px", margin: "0 auto" }}>
+    <div className="w-full max-w-[800px] mx-auto">
       <svg
         width="100%"
         height="100%"

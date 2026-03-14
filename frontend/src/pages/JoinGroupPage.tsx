@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { useParams, useSearchParams, useNavigate, Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
+import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
+import LinkButton from "@/components/LinkButton";
 import PageTransition from "@/components/PageTransition";
 import { joinGroup, ApiError } from "@/lib/api";
 
@@ -57,9 +57,10 @@ function JoinGroupPage() {
           {status === "error" && (
             <div className="flex flex-col items-center gap-4">
               <p className="text-destructive font-medium">{errorMsg}</p>
-              <Button variant="outline" asChild>
-                <Link to="/dashboard">Back to Dashboard</Link>
-              </Button>
+              <LinkButton variant="outline" to="/dashboard">
+                <ArrowLeft className="size-4" />
+                Back to Dashboard
+              </LinkButton>
             </div>
           )}
         </CardContent>

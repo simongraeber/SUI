@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { AuthProvider } from "./lib/AuthContext";
 import RequireAuth from "./components/RequireAuth";
 import RequireGroupMember from "./components/RequireGroupMember";
+import LoadingState from "./components/LoadingState";
 import Footer from "./components/Footer";
 import { Toaster } from "@/components/ui/sonner";
 import "./App.css";
@@ -38,7 +39,7 @@ function App() {
         <Toaster position="top-right" richColors />
         <div className="flex flex-col min-h-screen bg-[var(--footer-bg)]">
           <main className="flex-1">
-            <Suspense>
+            <Suspense fallback={<LoadingState />}>
               <Routes>
               {/* Public */}
               <Route path="/" element={<HomePage />} />
@@ -52,13 +53,13 @@ function App() {
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/group/:groupId/join" element={<JoinGroupPage />} />
+                <Route path="/group/:groupId" element={<GroupPage />} />
+                <Route path="/leaderboard/:groupId" element={<LeaderboardPage />} />
+                <Route path="/group/:groupId/member/:memberId" element={<PlayerPage />} />
 
                 {/* Group-member-only routes */}
                 <Route element={<RequireGroupMember />}>
-                  <Route path="/group/:groupId" element={<GroupPage />} />
                   <Route path="/game/:groupId" element={<GamePage />} />
-                  <Route path="/leaderboard/:groupId" element={<LeaderboardPage />} />
-                  <Route path="/group/:groupId/member/:memberId" element={<PlayerPage />} />
                 </Route>
               </Route>
 

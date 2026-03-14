@@ -1,6 +1,6 @@
-import { Link } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import { motion } from "framer-motion";
-import { Button } from "@/components/ui/button";
+import LinkButton from "@/components/LinkButton";
 import { fadeUpIndexed } from "@/lib/animations";
 import notFoundImage from "../assets/Messages/404.webp";
 
@@ -43,9 +43,10 @@ function NotFoundPage() {
         initial="hidden"
         animate="show"
       >
-        <Button size="lg" asChild>
-          <Link to="/">Go Back Home</Link>
-        </Button>
+        <LinkButton size="lg" to="/">
+          <ArrowLeft className="size-4" />
+          Back to Home
+        </LinkButton>
       </motion.div>
     </div>
   );

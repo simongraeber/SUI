@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { slideInX } from "@/lib/animations";
 
 interface StepCardProps {
   step: number;
@@ -12,14 +13,13 @@ interface StepCardProps {
 }
 
 function StepCard({ step, image, title, description, reverse = false }: StepCardProps) {
-  const slideDirection = reverse ? 60 : -60;
-
   return (
     <motion.div
-      initial={{ opacity: 0, x: slideDirection }}
-      whileInView={{ opacity: 1, x: 0 }}
+      custom={reverse ? 60 : -60}
+      variants={slideInX}
+      initial="hidden"
+      whileInView="show"
       viewport={{ once: true, margin: "-60px" }}
-      transition={{ duration: 0.6, ease: "easeOut" as const }}
     >
       <Card
         className={cn(
@@ -40,7 +40,7 @@ function StepCard({ step, image, title, description, reverse = false }: StepCard
           />
         </motion.div>
         <div className={cn("flex-1 text-center", reverse ? "md:text-right" : "md:text-left")}>
-          <Badge variant="secondary" className="mb-2 bg-[var(--badge-bg)] text-[var(--badge-text)] uppercase tracking-wider text-xs">
+          <Badge variant="secondary" className="mb-2 uppercase tracking-wider text-xs">
             Step {step}
           </Badge>
           <h3 className="text-xl font-bold text-foreground mt-2 mb-1">{title}</h3>

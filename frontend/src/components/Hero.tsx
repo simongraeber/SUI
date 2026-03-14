@@ -1,6 +1,6 @@
-import { Link } from "react-router-dom";
-import { motion, type Variants } from "framer-motion";
-import { Button } from "@/components/ui/button";
+import { motion } from "framer-motion";
+import LinkButton from "@/components/LinkButton";
+import { fadeUp, staggerContainer } from "@/lib/animations";
 
 interface HeroProps {
   title: string;
@@ -11,21 +11,11 @@ interface HeroProps {
   logoDarkSrc?: string;
 }
 
-const container: Variants = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.18 } },
-};
-
-const fadeUp: Variants = {
-  hidden: { opacity: 0, y: 30 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" as const } },
-};
-
 function Hero({ title, subtitle, ctaText, ctaLink, logoSrc, logoDarkSrc }: HeroProps) {
   return (
     <motion.div
       className="hero"
-      variants={container}
+      variants={staggerContainer}
       initial="hidden"
       animate="show"
     >
@@ -50,9 +40,7 @@ function Hero({ title, subtitle, ctaText, ctaLink, logoSrc, logoDarkSrc }: HeroP
         {subtitle}
       </motion.p>
       <motion.div variants={fadeUp}>
-        <Button size="lg" asChild>
-          <Link to={ctaLink}>{ctaText}</Link>
-        </Button>
+        <LinkButton size="lg" to={ctaLink}>{ctaText}</LinkButton>
       </motion.div>
     </motion.div>
   );

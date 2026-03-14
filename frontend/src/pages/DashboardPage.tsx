@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState, useCallback, useTransition } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,18 +9,18 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import UserAvatar from "@/components/UserAvatar";
 import { Plus, Users, Gamepad2 } from "lucide-react";
 import { toast } from "sonner";
 import PageTransition from "@/components/PageTransition";
-import LoadingState from "@/components/LoadingState";
+import { Skeleton } from "@/components/ui/skeleton";
 import { staggerContainer, fadeUp } from "@/lib/animations";
 import { useAuth } from "@/lib/AuthContext";
 import {
   listMyGroups,
   createGroup,
   getGroup,
-  resolveImageUrl,
   type GroupSummary,
   type GroupMember,
 } from "@/lib/api";
@@ -30,6 +30,8 @@ const AVATAR_SIZE = 40; // w-10
 const AVATAR_OVERLAP = 8; // -space-x-2
 
 function GroupCard({ group, members }: { group: GroupSummary; members: GroupMember[] }) {
+  const navigate = useNavigate();
+  const [isPending, startTransition] = useTransition();
   const containerRef = useRef<HTMLDivElement>(null);
   const [maxVisible, setMaxVisible] = useState(0);
 
@@ -59,8 +61,11 @@ function GroupCard({ group, members }: { group: GroupSummary; members: GroupMemb
 
   return (
     <motion.div variants={fadeUp}>
-      <Link to={`/group/${group.id}`} className="no-underline">
-        <Card className="transition-all hover:-translate-y-0.5 hover:shadow-md cursor-pointer">
+      <div
+        onClick={() => startTransition(() => navigate(`/group/${group.id}`))}
+        className="cursor-pointer"
+      >
+        <Card className={`transition-all hover:-translate-y-0.5 hover:shadow-md ${isPending ? "animate-pulse" : ""}`}>
           <div className="flex items-center gap-3 px-4 py-3">
             {/* Group name & count */}
             <div className="rounded-lg bg-secondary p-2 shrink-0">
@@ -77,12 +82,7 @@ function GroupCard({ group, members }: { group: GroupSummary; members: GroupMemb
             <div ref={containerRef} className="flex-1 min-w-0 flex justify-end">
               <div className="flex -space-x-2">
               {visible.map((m) => (
-                <Avatar key={m.user_id} className="h-10 w-10 shadow-sm shrink-0">
-                  <AvatarImage src={resolveImageUrl(m.image_url) ?? undefined} alt={m.name} />
-                  <AvatarFallback className="text-[10px]">
-                    {m.name?.charAt(0)?.toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar key={m.user_id} name={m.name} imageUrl={m.image_url} className="h-10 w-10 shadow-sm shrink-0" fallbackClassName="text-[10px]" />
               ))}
               {overflow > 0 && (
                 <Avatar className="h-10 w-10 shadow-sm shrink-0">
@@ -95,13 +95,14 @@ function GroupCard({ group, members }: { group: GroupSummary; members: GroupMemb
             </div>
           </div>
         </Card>
-      </Link>
+      </div>
     </motion.div>
   );
 }
 
 function DashboardPage() {
   const navigate = useNavigate();
+  const [isProfilePending, startProfileTransition] = useTransition();
   const { user } = useAuth();
   const [groups, setGroups] = useState<GroupSummary[]>([]);
   const [groupMembers, setGroupMembers] = useState<Record<string, GroupMember[]>>({});
@@ -130,8 +131,6 @@ function DashboardPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const profileImg = resolveImageUrl(user?.image_url);
-
   const handleCreate = async () => {
     if (!newName.trim()) return;
     setCreating(true);
@@ -148,8 +147,6 @@ function DashboardPage() {
     }
   };
 
-  if (loading) return <LoadingState message="Loading groups…" />;
-
   return (
     <PageTransition className="max-w-3xl mx-auto px-4 py-8">
       {/* Header with profile avatar */}
@@ -160,14 +157,17 @@ function DashboardPage() {
           <p className="text-muted-foreground text-sm">Your game hub at a glance.</p>
         </div>
         <div className="flex-1 flex justify-center sm:justify-end">
-          <Link to="/profile" className="no-underline">
-            <Avatar className="h-20 w-20 border-2 border-border hover:border-primary transition-colors cursor-pointer">
-              <AvatarImage src={profileImg ?? undefined} alt={user?.name ?? "Profile"} />
-              <AvatarFallback className="text-sm">
-                {user?.name?.charAt(0)?.toUpperCase() ?? "?"}
-              </AvatarFallback>
-            </Avatar>
-          </Link>
+          <div
+            onClick={() => startProfileTransition(() => navigate('/profile'))}
+            className="cursor-pointer"
+          >
+            <UserAvatar
+              name={user?.name}
+              imageUrl={user?.image_url}
+              className={`h-20 w-20 border-2 border-border hover:border-primary transition-colors cursor-pointer ${isProfilePending ? "animate-pulse" : ""}`}
+              fallbackClassName="text-sm"
+            />
+          </div>
         </div>
       </div>
 
@@ -175,7 +175,13 @@ function DashboardPage() {
       <h2 className="text-xl font-semibold mb-4">My Groups</h2>
 
       {/* Group list */}
-      {groups.length === 0 ? (
+      {loading ? (
+        <div className="flex flex-col gap-4 mb-6">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <Skeleton key={i} className="h-[71px] w-full rounded-2xl" />
+          ))}
+        </div>
+      ) : groups.length === 0 ? (
         <Card className="mb-6">
           <CardContent className="flex flex-col items-center gap-4 py-8">
             <Users className="size-10 text-muted-foreground" />
@@ -202,7 +208,7 @@ function DashboardPage() {
       )}
 
       {/* Create group — at the bottom */}
-      {showCreate ? (
+      {!loading && (showCreate ? (
         <Card className="mb-6">
           <CardContent className="flex flex-col gap-3 py-6">
             <Input
@@ -229,7 +235,7 @@ function DashboardPage() {
             Create a Group
           </Button>
         </div>
-      )}
+      ))}
 
     </PageTransition>
   );

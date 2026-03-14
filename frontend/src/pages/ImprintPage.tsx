@@ -1,9 +1,8 @@
-import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Button } from "@/components/ui/button";
-import { User, MapPin, Mail } from "lucide-react";
+import LinkButton from "@/components/LinkButton";
+import { User, MapPin, Mail, ArrowLeft } from "lucide-react";
 import PageTransition from "@/components/PageTransition";
 import GreetingsAnimation from "../components/GreetingsAnimation";
 import { fadeUp, popIn, staggerContainer } from "@/lib/animations";
@@ -82,9 +81,10 @@ function ImprintPage() {
         </motion.div>
 
         <motion.div variants={fadeUp}>
-          <Button variant="outline" asChild>
-            <Link to="/">Go back to Home Page</Link>
-          </Button>
+          <LinkButton variant="outline" to="/">
+            <ArrowLeft className="size-4" />
+            Back to Home
+          </LinkButton>
         </motion.div>
       </motion.div>
     </PageTransition>

@@ -1,27 +1,26 @@
 import { useEffect, useState } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
-import { FormDots, eloColor } from "@/components/FormDots";
+import { useParams, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
+import { revealY } from "@/lib/animations";
+import { FormDots } from "@/components/FormDots";
+import { eloColor } from "@/lib/utils";
 import { useAuth } from "@/lib/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import LinkButton from "@/components/LinkButton";
+import UserAvatar from "@/components/UserAvatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Pencil, Shield, Swords, TrendingUp } from "lucide-react";
-import { useSpring, useTransform } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
-import LoadingState from "@/components/LoadingState";
 import {
   getGroup,
   getGroupStats,
   listPlayerGames,
-  resolveImageUrl,
   type PlayerStats,
   type GameResponse,
   type GroupMember,
 } from "@/lib/api";
-
-
 
 /* ── Stat row helper ── */
 function StatRow({ label, value, color }: { label: string; value: string | number; color?: string }) {
@@ -32,26 +31,6 @@ function StatRow({ label, value, color }: { label: string; value: string | numbe
     </div>
   );
 }
-
-/* ── Animated counter ── */
-function AnimatedNumber({ value }: { value: number }) {
-  const spring = useSpring(0, { stiffness: 60, damping: 20 });
-  const display = useTransform(spring, (v: number) => Math.round(v));
-  const [current, setCurrent] = useState(0);
-
-  useEffect(() => {
-    spring.set(value);
-  }, [value, spring]);
-
-  useEffect(() => {
-    const unsubscribe = display.on("change", (v: number) => setCurrent(v));
-    return unsubscribe;
-  }, [display]);
-
-  return <span>{current}</span>;
-}
-
-
 
 function PlayerPage() {
   const { groupId, memberId: userId } = useParams<{ groupId: string; memberId: string }>();
@@ -81,16 +60,54 @@ function PlayerPage() {
       .finally(() => setLoading(false));
   }, [groupId, userId, navigate]);
 
-  if (loading) return <LoadingState message="Loading player…" />;
+  if (loading) {
+    return (
+      <PageTransition className="max-w-lg mx-auto px-4 py-8">
+        {/* Avatar + name + elo skeleton */}
+        <div className="flex flex-col items-center mb-6">
+          <Skeleton className="h-28 w-28 rounded-full mb-3" />
+          <h1 className="text-lg font-bold">
+            <Skeleton className="h-[1em] w-32 rounded-md inline-block align-middle" />
+          </h1>
+          <Card className="mt-3 px-6 py-3">
+            <Skeleton className="h-9 w-28" />
+          </Card>
+        </div>
+        {/* Stats card skeleton */}
+        <Card className="mb-4">
+          <CardHeader className="pb-2">
+            <Skeleton className="h-5 w-28" />
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex justify-between">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-12" />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+        {/* Recent games skeleton */}
+        <Card className="mb-6">
+          <CardHeader className="pb-2">
+            <Skeleton className="h-5 w-32" />
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-14 w-full rounded-md" />
+            ))}
+          </CardContent>
+        </Card>
+      </PageTransition>
+    );
+  }
   if (!player && !member) {
     return (
       <PageTransition className="max-w-md mx-auto px-4 py-16 text-center">
         <p className="text-muted-foreground mb-4">Player not found.</p>
-        <Button variant="outline" asChild>
-          <Link to={`/group/${groupId}`}>
-            <ArrowLeft className="size-4" /> Back
-          </Link>
-        </Button>
+        <LinkButton variant="outline" to={`/group/${groupId}`}>
+          <ArrowLeft className="size-4" /> Back
+        </LinkButton>
       </PageTransition>
     );
   }
@@ -104,15 +121,12 @@ function PlayerPage() {
             className={`relative${isOwnProfile ? " cursor-pointer group" : ""}`}
             onClick={isOwnProfile ? () => navigate("/profile") : undefined}
           >
-            <Avatar className="h-28 w-28 mb-3">
-              <AvatarImage
-                src={resolveImageUrl(member!.image_url) ?? undefined}
-                alt={member!.name}
-              />
-              <AvatarFallback className="text-3xl">
-                {member!.name?.charAt(0)?.toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
+            <UserAvatar
+              name={member!.name}
+              imageUrl={member!.image_url}
+              className="h-28 w-28 mb-3"
+              fallbackClassName="text-3xl"
+            />
             {isOwnProfile && (
               <span className="absolute bottom-2 right-0 bg-primary text-primary-foreground rounded-full p-1 shadow group-hover:scale-110 transition-transform">
                 <Pencil className="size-3.5" />
@@ -124,10 +138,10 @@ function PlayerPage() {
         </div>
 
         <div className="flex justify-center mt-4">
-          <Button variant="outline" onClick={() => navigate(-1)}>
+          <LinkButton variant="outline" to={`/group/${groupId}`}>
             <ArrowLeft className="size-4" />
             Back
-          </Button>
+          </LinkButton>
         </div>
       </PageTransition>
     );
@@ -148,15 +162,12 @@ function PlayerPage() {
           className={`relative${isOwnProfile ? " cursor-pointer group" : ""}`}
           onClick={isOwnProfile ? () => navigate("/profile") : undefined}
         >
-          <Avatar className="h-28 w-28 mb-3">
-            <AvatarImage
-              src={resolveImageUrl(player.image_url) ?? undefined}
-              alt={player.name}
+          <UserAvatar
+              name={player.name}
+              imageUrl={player.image_url}
+              className="h-28 w-28 mb-3"
+              fallbackClassName="text-3xl"
             />
-            <AvatarFallback className="text-3xl">
-              {player.name?.charAt(0)?.toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
           {isOwnProfile && (
             <span className="absolute bottom-2 right-0 bg-primary text-primary-foreground rounded-full p-1 shadow group-hover:scale-110 transition-transform">
               <Pencil className="size-3.5" />
@@ -165,15 +176,22 @@ function PlayerPage() {
         </div>
         <h1 className="text-lg font-bold text-center">{player.name}</h1>
         {player.provisional && (
-          <Badge variant="secondary" className="text-[10px] mt-1">
-            Provisional
-          </Badge>
+          <motion.div
+            variants={revealY}
+            initial="hidden"
+            animate="show"
+            style={{ originY: 0 }}
+          >
+            <Badge variant="secondary" className="text-[10px] mt-1">
+              Provisional
+            </Badge>
+          </motion.div>
         )}
         <Card className="mt-3 px-6 py-3">
           <div className="flex items-center justify-center gap-2">
             <TrendingUp className={`size-5 ${eloColor(player.elo)}`} />
             <p className={`text-3xl font-bold text-center ${eloColor(player.elo)}`}>
-              <AnimatedNumber value={player.elo} />{" "}
+              {player.elo}{" "}
               <span className="text-base font-normal text-muted-foreground">Elo</span>
             </p>
           </div>
@@ -291,10 +309,10 @@ function PlayerPage() {
 
       {/* ── Navigation ── */}
       <div className="flex justify-center">
-        <Button variant="outline" onClick={() => navigate(-1)}>
+        <LinkButton variant="outline" to={`/group/${groupId}`}>
           <ArrowLeft className="size-4" />
           Back
-        </Button>
+        </LinkButton>
       </div>
     </PageTransition>
   );

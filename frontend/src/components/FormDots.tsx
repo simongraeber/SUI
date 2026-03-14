@@ -22,11 +22,5 @@ function FormDots({ form, size = "sm" }: { form: string[]; size?: "sm" | "md" })
   );
 }
 
-/** Elo-tier color class. */
-function eloColor(elo: number): string {
-  if (elo >= 1100) return "text-green-600 dark:text-green-400";
-  if (elo < 900) return "text-red-500";
-  return "";
-}
 
-export { FormDots, eloColor };
+export { FormDots };

@@ -13,14 +13,6 @@ import { askQuestion, resolveImageUrl, type AskResponse, type AIComponent, ApiEr
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
-function AICard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`rounded-2xl border border-border bg-background text-card-foreground shadow-sm ${className}`}>
-      {children}
-    </div>
-  );
-}
-
 /* ── Icon + color mapping ── */
 const ICON_MAP: Record<string, LucideIcon> = {
   goal: Goal,
@@ -83,7 +75,7 @@ function RankedListCard({ icon, title, items }: Extract<AIComponent, { type: "ra
   const style = ICON_STYLE[icon] ?? ICON_STYLE.star;
 
   return (
-    <AICard>
+    <Card className="rounded-2xl bg-background">
       <CardContent className="pt-5 pb-4">
         <div className="flex items-center gap-2 mb-3">
           <Icon className={`size-5 shrink-0 ${style.iconColor}`} />
@@ -104,7 +96,7 @@ function RankedListCard({ icon, title, items }: Extract<AIComponent, { type: "ra
           ))}
         </div>
       </CardContent>
-    </AICard>
+    </Card>
   );
 }
 
@@ -114,7 +106,7 @@ function StatHighlightCard({ icon, label, value, subtitle, image_urls }: Extract
   const hasAvatar = image_urls && image_urls.length > 0;
 
   return (
-    <AICard>
+    <Card className="rounded-2xl bg-background">
       <CardContent className="pt-5 pb-4 flex items-center gap-4">
         {hasAvatar ? (
           <AvatarStack urls={image_urls} name={label} size="md" />
@@ -129,13 +121,13 @@ function StatHighlightCard({ icon, label, value, subtitle, image_urls }: Extract
           {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
         </div>
       </CardContent>
-    </AICard>
+    </Card>
   );
 }
 
 function ComparisonCard({ title, sides }: Extract<AIComponent, { type: "comparison" }>) {
   return (
-    <AICard>
+    <Card className="rounded-2xl bg-background">
       <CardContent className="pt-5 pb-4">
         <p className="text-sm font-semibold mb-3 text-center">{title}</p>
         <div className="grid grid-cols-2 gap-4">
@@ -155,7 +147,7 @@ function ComparisonCard({ title, sides }: Extract<AIComponent, { type: "comparis
           ))}
         </div>
       </CardContent>
-    </AICard>
+    </Card>
   );
 }
 
@@ -163,7 +155,7 @@ function BarChartCard({ title, bars }: Extract<AIComponent, { type: "bar-chart" 
   const max = Math.max(...bars.map((b) => b.value), 1);
 
   return (
-    <AICard>
+    <Card className="rounded-2xl bg-background">
       <CardContent className="pt-5 pb-4">
         <p className="text-sm font-semibold mb-3">{title}</p>
         <div className="space-y-2">
@@ -186,13 +178,13 @@ function BarChartCard({ title, bars }: Extract<AIComponent, { type: "bar-chart" 
           ))}
         </div>
       </CardContent>
-    </AICard>
+    </Card>
   );
 }
 
 function TableCard({ title, columns, rows }: Extract<AIComponent, { type: "table" }>) {
   return (
-    <AICard>
+    <Card className="rounded-2xl bg-background">
       <CardContent className="pt-5 pb-4">
         <p className="text-sm font-semibold mb-3">{title}</p>
         <div className="overflow-x-auto">
@@ -218,22 +210,22 @@ function TableCard({ title, columns, rows }: Extract<AIComponent, { type: "table
           </table>
         </div>
       </CardContent>
-    </AICard>
+    </Card>
   );
 }
 
 function CalloutCard({ emoji, text }: Extract<AIComponent, { type: "callout" }>) {
   return (
-    <AICard className="px-4 py-3 flex items-start gap-2">
+    <Card className="rounded-2xl bg-background px-4 py-3 flex items-start gap-2">
       <span className="text-lg">{emoji}</span>
       <p className="text-sm text-foreground leading-relaxed">{text}</p>
-    </AICard>
+    </Card>
   );
 }
 
 function HeadToHeadCard({ player_a, player_b, stats }: Extract<AIComponent, { type: "head-to-head" }>) {
   return (
-    <AICard>
+    <Card className="rounded-2xl bg-background">
       <CardContent className="pt-5 pb-4">
         {/* Player headers */}
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 mb-4">
@@ -262,7 +254,7 @@ function HeadToHeadCard({ player_a, player_b, stats }: Extract<AIComponent, { ty
           ))}
         </div>
       </CardContent>
-    </AICard>
+    </Card>
   );
 }
 
@@ -444,12 +436,12 @@ function AskAI({ groupId }: { groupId: string }) {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   transition={{ delay: 0.05, duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
                 >
-                  <AICard className="px-4 py-3">
+                  <Card className="rounded-2xl bg-background px-4 py-3">
                     <div className="flex items-start gap-2">
                       <Sparkles className="size-4 text-purple-500 mt-0.5 shrink-0" />
                       <p className="text-sm leading-relaxed text-foreground">{result.answer}</p>
                     </div>
-                  </AICard>
+                  </Card>
                 </motion.div>
               )}
 

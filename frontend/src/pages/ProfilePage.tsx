@@ -1,8 +1,9 @@
 import { useRef, useState, useEffect } from "react";
-import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import LinkButton from "@/components/LinkButton";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
   Dialog,
@@ -12,9 +13,9 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { ArrowLeft, Upload, Loader2 } from "lucide-react";
+import { ArrowLeft, Upload, Loader2, LogOut, Gamepad2, Trophy, Goal } from "lucide-react";
 import PageTransition from "@/components/PageTransition";
-import { staggerContainer, fadeUp } from "@/lib/animations";
+import { cardSlideUp, staggerContainer } from "@/lib/animations";
 import { useAuth } from "@/lib/AuthContext";
 import {
   generateAIImage,
@@ -43,11 +44,10 @@ async function resizeImage(file: File, maxDim = 1024, quality = 0.8): Promise<Fi
 }
 
 function ProfilePage() {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, logout } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [preview, setPreview] = useState<string | null>(null);
-  const [, setSelectedFile] = useState<File | null>(null);
   const [aiPreview, setAiPreview] = useState<string | null>(null);
   const [aiImageId, setAiImageId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -104,7 +104,6 @@ function ProfilePage() {
     } catch {
       finalFile = file;
     }
-    setSelectedFile(finalFile);
     setPreview(URL.createObjectURL(finalFile));
     setAiPreview(null);
     setError(null);
@@ -131,7 +130,6 @@ function ProfilePage() {
       const imageUrl = `/api/v1/images/${aiImageId}`;
       await updateMe({ image_url: imageUrl });
       await refreshUser();
-      setSelectedFile(null);
       setPreview(null);
       setAiPreview(null);
       setAiImageId(null);
@@ -196,7 +194,6 @@ function ProfilePage() {
           if (!open) {
             setAiPreview(null);
             setPreview(null);
-            setSelectedFile(null);
           }
         }}
       >
@@ -228,7 +225,6 @@ function ProfilePage() {
               onClick={() => {
                 setAiPreview(null);
                 setPreview(null);
-                setSelectedFile(null);
               }}
             >
               Discard
@@ -240,34 +236,59 @@ function ProfilePage() {
       {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
 
       {/* Stats */}
-      <motion.div
-        className="flex justify-center gap-4 flex-wrap mb-8"
-        variants={staggerContainer}
-        initial="hidden"
-        animate="show"
-      >
-        {[
-          { value: statsLoading ? "…" : String(totalGames), label: "Games Played" },
-          { value: statsLoading ? "…" : String(totalWins), label: "Wins" },
-          { value: statsLoading ? "…" : String(totalGoals), label: "Goals Scored" },
-        ].map(({ value, label }) => (
-          <motion.div key={label} variants={fadeUp}>
-            <Card className="min-w-[100px]">
-              <CardContent className="flex flex-col items-center p-4">
-                <span className="text-3xl font-bold">{value}</span>
-                <span className="text-xs text-muted-foreground mt-1">{label}</span>
+      {statsLoading ? (
+        <div className="grid grid-cols-3 gap-3 mb-8 max-w-md mx-auto">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-[90px] w-full rounded-xl" />
+          ))}
+        </div>
+      ) : (
+        <motion.div
+          className="grid grid-cols-3 gap-3 mb-8 max-w-md mx-auto"
+          variants={staggerContainer}
+          initial="hidden"
+          animate="show"
+        >
+          <motion.div variants={cardSlideUp}>
+            <Card>
+              <CardContent className="pt-5 pb-4 text-center">
+                <Gamepad2 className="size-5 mx-auto mb-1.5 text-blue-500" />
+                <p className="text-xs text-muted-foreground">Games</p>
+                <p className="text-xl font-bold">{totalGames}</p>
               </CardContent>
             </Card>
           </motion.div>
-        ))}
-      </motion.div>
+          <motion.div variants={cardSlideUp}>
+            <Card>
+              <CardContent className="pt-5 pb-4 text-center">
+                <Trophy className="size-5 mx-auto mb-1.5 text-yellow-500" />
+                <p className="text-xs text-muted-foreground">Wins</p>
+                <p className="text-xl font-bold">{totalWins}</p>
+              </CardContent>
+            </Card>
+          </motion.div>
+          <motion.div variants={cardSlideUp}>
+            <Card>
+              <CardContent className="pt-5 pb-4 text-center">
+                <Goal className="size-5 mx-auto mb-1.5 text-red-500" />
+                <p className="text-xs text-muted-foreground">Goals</p>
+                <p className="text-xl font-bold">{totalGoals}</p>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </motion.div>
+      )}
 
-      <Button variant="outline" asChild>
-        <Link to="/dashboard">
+      <div className="flex justify-center gap-3">
+        <LinkButton variant="outline" to="/dashboard">
           <ArrowLeft className="size-4" />
           Back to Dashboard
-        </Link>
-      </Button>
+        </LinkButton>
+        <Button variant="destructive" onClick={() => logout()}>
+          <LogOut className="size-4" />
+          Log Out
+        </Button>
+      </div>
     </PageTransition>
   );
 }

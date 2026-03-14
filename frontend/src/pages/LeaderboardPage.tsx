@@ -1,12 +1,13 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
-import { FormDots, eloColor } from "@/components/FormDots";
+import { useEffect, useState, useMemo, useCallback, useTransition } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { FormDots } from "@/components/FormDots";
+import { eloColor } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { type ColumnDef } from "@tanstack/react-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import UserAvatar from "@/components/UserAvatar";
 import {
   Popover,
   PopoverTrigger,
@@ -28,12 +29,20 @@ import {
   Flame,
 } from "lucide-react";
 import PageTransition from "@/components/PageTransition";
-import LoadingState from "@/components/LoadingState";
+import LinkButton from "@/components/LinkButton";
 import AskAI from "@/components/AskAI";
-import { staggerContainer, fadeUp } from "@/lib/animations";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cardSlideUp, staggerContainer } from "@/lib/animations";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   getGroupStats,
-  resolveImageUrl,
   type GroupStats,
   type PlayerStats,
 } from "@/lib/api";
@@ -90,31 +99,38 @@ function getDateRange(key: PeriodKey): {
   };
 }
 
-/* ── Info tooltip ── */
-function InfoTooltip() {
+/* ── Player name cell (isolated transition state) ── */
+function PlayerCell({ player, groupId }: { player: PlayerStats; groupId: string }) {
+  const navigate = useNavigate();
+  const [isPending, startTransition] = useTransition();
+
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button
-          className="absolute top-6 right-6 z-10 text-muted-foreground hover:text-foreground transition-colors"
-          aria-label="Ranking info"
-        >
-          <Info className="size-5" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-64 text-xs">
-        <p className="font-semibold mb-1">How rankings work</p>
-        <p>
-          Players are ranked by Elo rating — a skill score that adjusts based on
-          match outcomes and opponent strength. Beating stronger opponents gives
-          more points. New players (&lt; 10 games) are marked as provisional (P).
-        </p>
-      </PopoverContent>
-    </Popover>
+    <div
+      className={`flex items-center gap-2 cursor-pointer hover:opacity-80 ${isPending ? "animate-pulse" : ""}`}
+      onClick={() => {
+        startTransition(() => navigate(`/group/${groupId}/member/${player.user_id}`));
+      }}
+    >
+      <UserAvatar name={player.name} imageUrl={player.image_url} className="h-7 w-7" fallbackClassName="text-[10px]" />
+      <span className="truncate max-w-[120px] underline-offset-2 hover:underline">{player.name}</span>
+      {player.provisional && (
+        <HoverCard>
+          <HoverCardTrigger asChild>
+            <span
+              className="shrink-0 inline-flex items-center justify-center size-4 text-[9px] leading-none font-bold bg-muted text-muted-foreground rounded-full cursor-help"
+              aria-label="Provisional rating"
+            >
+              P
+            </span>
+          </HoverCardTrigger>
+          <HoverCardContent className="w-48 text-xs">
+            Provisional — rating will stabilize after 10 games
+          </HoverCardContent>
+        </HoverCard>
+      )}
+    </div>
   );
 }
-
-
 
 /* ── Main component ── */
 function LeaderboardPage() {
@@ -131,7 +147,7 @@ function LeaderboardPage() {
       const range = getDateRange(p);
       getGroupStats(groupId, range.start, range.end)
         .then(setStats)
-        .catch(() => {})
+        .catch(() => navigate(`/group/${groupId}`, { replace: true }))
         .finally(() => setLoading(false));
     },
     [groupId],
@@ -163,41 +179,9 @@ function LeaderboardPage() {
           accessorKey: "name",
           header: "Player",
           enableSorting: false,
-          cell: ({ row }) => {
-            const p = row.original;
-            return (
-              <div
-                className="flex items-center gap-2 cursor-pointer hover:opacity-80"
-                onClick={() => navigate(`/group/${groupId}/member/${p.user_id}`)}
-              >
-                <Avatar className="h-7 w-7">
-                  <AvatarImage
-                    src={resolveImageUrl(p.image_url) ?? undefined}
-                    alt={p.name}
-                  />
-                  <AvatarFallback className="text-[10px]">
-                    {p.name?.charAt(0)?.toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="truncate max-w-[120px] underline-offset-2 hover:underline">{p.name}</span>
-                {p.provisional && (
-                  <HoverCard>
-                    <HoverCardTrigger asChild>
-                      <span
-                        className="shrink-0 inline-flex items-center justify-center size-4 text-[9px] leading-none font-bold bg-muted text-muted-foreground rounded-full cursor-help"
-                        aria-label="Provisional rating"
-                      >
-                        P
-                      </span>
-                    </HoverCardTrigger>
-                    <HoverCardContent className="w-48 text-xs">
-                      Provisional — rating will stabilize after 10 games
-                    </HoverCardContent>
-                  </HoverCard>
-                )}
-              </div>
-            );
-          },
+          cell: ({ row }) => (
+            <PlayerCell player={row.original} groupId={groupId!} />
+          ),
         },
         {
           accessorKey: "elo",
@@ -417,14 +401,12 @@ function LeaderboardPage() {
 
       return cols;
     },
-    [isPeriod],
+    [isPeriod, groupId],
   );
 
-  if (loading && !stats) return <LoadingState message="Loading stats…" />;
+  if (!loading && !stats) return null;
 
-  if (!stats) return <LoadingState message="Could not load stats." />;
-
-  const { summary, total_games } = stats;
+  const showSkeleton = loading && !stats;
 
   return (
     <PageTransition className="max-w-4xl mx-auto px-4 py-8">
@@ -451,7 +433,13 @@ function LeaderboardPage() {
       </div>
 
       {/* ── Summary cards ── */}
-      {total_games === 0 && !loading ? (
+      {showSkeleton ? (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-[116px] w-full rounded-xl" />
+          ))}
+        </div>
+      ) : stats!.total_games === 0 ? (
         <Card className="mb-8">
           <CardContent className="py-8 text-center text-muted-foreground italic">
             No games played{isPeriod ? " in this period" : " yet"}.
@@ -464,28 +452,27 @@ function LeaderboardPage() {
           initial="hidden"
           animate="show"
         >
-          <motion.div variants={fadeUp}>
-            <Card>
+          <motion.div variants={cardSlideUp} className="h-full">
+            <Card className="h-full">
               <CardContent className="pt-5 pb-4 text-center">
                 <Gamepad2 className="size-5 mx-auto mb-1.5 text-blue-500" />
                 <p className="text-xs text-muted-foreground">Total Games</p>
-                <p className="text-xl font-bold">{total_games}</p>
+                <p className="text-xl font-bold">{stats!.total_games}</p>
               </CardContent>
             </Card>
           </motion.div>
-
-          <motion.div variants={fadeUp}>
-            <Card>
+          <motion.div variants={cardSlideUp} className="h-full">
+            <Card className="h-full">
               <CardContent className="pt-5 pb-4 text-center">
                 <Crown className="size-5 mx-auto mb-1.5 text-yellow-500" />
                 <p className="text-xs text-muted-foreground">Highest Rated</p>
-                {summary.highest_rated ? (
+                {stats!.summary.highest_rated ? (
                   <>
                     <p className="text-sm font-bold truncate">
-                      {summary.highest_rated.name}
+                      {stats!.summary.highest_rated.name}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {summary.highest_rated.elo} Elo
+                      {stats!.summary.highest_rated.elo} Elo
                     </p>
                   </>
                 ) : (
@@ -494,20 +481,19 @@ function LeaderboardPage() {
               </CardContent>
             </Card>
           </motion.div>
-
-          <motion.div variants={fadeUp}>
-            <Card>
+          <motion.div variants={cardSlideUp} className="h-full">
+            <Card className="h-full">
               <CardContent className="pt-5 pb-4 text-center">
                 <Goal className="size-5 mx-auto mb-1.5 text-red-500" />
                 <p className="text-xs text-muted-foreground">Top Scorer</p>
-                {summary.top_scorer ? (
+                {stats!.summary.top_scorer ? (
                   <>
                     <p className="text-sm font-bold truncate">
-                      {summary.top_scorer.name}
+                      {stats!.summary.top_scorer.name}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {summary.top_scorer.goals} goal
-                      {summary.top_scorer.goals !== 1 ? "s" : ""}
+                      {stats!.summary.top_scorer.goals} goal
+                      {stats!.summary.top_scorer.goals !== 1 ? "s" : ""}
                     </p>
                   </>
                 ) : (
@@ -516,19 +502,18 @@ function LeaderboardPage() {
               </CardContent>
             </Card>
           </motion.div>
-
-          <motion.div variants={fadeUp}>
-            <Card>
+          <motion.div variants={cardSlideUp} className="h-full">
+            <Card className="h-full">
               <CardContent className="pt-5 pb-4 text-center">
                 <Flame className="size-5 mx-auto mb-1.5 text-orange-500" />
                 <p className="text-xs text-muted-foreground">Hot Streak</p>
-                {summary.hot_streak ? (
+                {stats!.summary.hot_streak ? (
                   <>
                     <p className="text-sm font-bold truncate">
-                      {summary.hot_streak.name}
+                      {stats!.summary.hot_streak.name}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      W{summary.hot_streak.count}
+                      W{stats!.summary.hot_streak.count}
                     </p>
                   </>
                 ) : (
@@ -541,9 +526,8 @@ function LeaderboardPage() {
       )}
 
       {/* ── Rankings table ── */}
-      {total_games > 0 && (
-        <Card className="relative">
-          <InfoTooltip />
+      {showSkeleton && (
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Shield className="size-5" />
@@ -551,7 +535,78 @@ function LeaderboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {stats.players.length === 0 ? (
+            <div className="overflow-hidden rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10"><Skeleton className="h-3.5 w-4" /></TableHead>
+                    <TableHead><Skeleton className="h-3.5 w-14" /></TableHead>
+                    <TableHead><Skeleton className="h-3.5 w-7" /></TableHead>
+                    <TableHead><Skeleton className="h-3.5 w-7" /></TableHead>
+                    <TableHead><Skeleton className="h-3.5 w-5" /></TableHead>
+                    <TableHead><Skeleton className="h-3.5 w-5" /></TableHead>
+                    <TableHead><Skeleton className="h-3.5 w-10" /></TableHead>
+                    <TableHead><Skeleton className="h-3.5 w-10" /></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell><Skeleton className="h-4 w-5" /></TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-7 w-7 rounded-full shrink-0" />
+                          <Skeleton className="h-4 w-20" />
+                        </div>
+                      </TableCell>
+                      <TableCell><Skeleton className="h-4 w-8 mx-auto" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-6 mx-auto" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-6 mx-auto" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-6 mx-auto" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-10 mx-auto" /></TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          {Array.from({ length: 5 }).map((_, j) => (
+                            <Skeleton key={j} className="size-2.5 rounded-full" />
+                          ))}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      {!showSkeleton && stats!.total_games > 0 && (
+        <Card className="relative">
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                className="absolute top-6 right-6 z-10 text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Ranking info"
+              >
+                <Info className="size-5" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-64 text-xs">
+              <p className="font-semibold mb-1">How rankings work</p>
+              <p>
+                Players are ranked by Elo rating — a skill score that adjusts based on
+                match outcomes and opponent strength. Beating stronger opponents gives
+                more points. New players (&lt; 10 games) are marked as provisional (P).
+              </p>
+            </PopoverContent>
+          </Popover>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="size-5" />
+              Player Rankings
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {stats!.players.length === 0 ? (
               <p className="text-center text-muted-foreground italic py-8">
                 No data yet. Play some games!
               </p>
@@ -559,7 +614,7 @@ function LeaderboardPage() {
               <>
                 <DataTable
                   columns={columns}
-                  data={stats.players}
+                  data={stats!.players}
                   defaultSorting={
                     isPeriod
                       ? [{ id: "elo_delta", desc: true }]
@@ -588,12 +643,10 @@ function LeaderboardPage() {
       {groupId && <AskAI groupId={groupId} />}
 
       <div className="flex flex-wrap justify-center gap-3 mt-6">
-        <Button variant="outline" asChild>
-          <Link to={`/group/${groupId}`}>
-            <ArrowLeft className="size-4" />
-            Back to Group
-          </Link>
-        </Button>
+        <LinkButton variant="outline" to={`/group/${groupId}`}>
+          <ArrowLeft className="size-4" />
+          Back to Group
+        </LinkButton>
       </div>
     </PageTransition>
   );

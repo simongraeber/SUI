@@ -1,10 +1,11 @@
 import Hero from "../components/Hero";
 import Section from "../components/Section";
-import FeatureCard, { featureContainerVariants } from "../components/FeatureCard";
+import FeatureCard from "../components/FeatureCard";
 import StepCard from "../components/StepCard";
-import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { useAuth } from "@/lib/AuthContext";
+import LinkButton from "@/components/LinkButton";
+import { featureContainerVariants } from "@/lib/animations";
 import onboardingWelcome from "../assets/onbording/onboarding-welcome.webp";
 import onboardingCreateTeam from "../assets/onbording/onboarding-create-team.webp";
 import onboardingInvite from "../assets/onbording/onboarding-invite.webp";
@@ -91,16 +92,14 @@ function HomePage() {
           Create your group, invite your rivals, and find out who's truly
           unbeatable.
         </p>
-        <Button
+        <LinkButton
           size="lg"
           variant="secondary"
           className="bg-white text-primary hover:bg-secondary"
-          asChild
+          to={user ? "/dashboard" : "/login"}
         >
-          <a href={user ? "/dashboard" : "/login"}>
-            {user ? "Go to Dashboard" : "Sign In with Google"}
-          </a>
-        </Button>
+          {user ? "Go to Dashboard" : "Sign In with Google"}
+        </LinkButton>
       </section>
     </>
   );

@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useState, useEffect, useTransition } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { FaGoogle } from "react-icons/fa";
-import { fadeUpIndexed } from "@/lib/animations";
+import { fadeUpIndexed, heroImageReveal } from "@/lib/animations";
 import { loginWithGoogleCode } from "@/lib/api";
 import { useAuth } from "@/lib/AuthContext";
 import loginImage from "../assets/LogInImage.webp";
@@ -26,6 +26,7 @@ function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [, startTransition] = useTransition();
 
   // Build the redirect target from state (preserving search params), or fall back
   // to whatever was saved in sessionStorage (survives the Google OAuth round-trip),
@@ -81,9 +82,9 @@ function LoginPage() {
       {/* hero image */}
       <motion.div
         className="login-image-wrapper"
-        initial={{ opacity: 0, scale: 0.92 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.6, ease: "easeOut" as const }}
+        variants={heroImageReveal}
+        initial="hidden"
+        animate="show"
       >
         <img src={loginImage} alt="Foosball action" className="login-hero-img" />
       </motion.div>
@@ -158,13 +159,13 @@ function LoginPage() {
           animate="show"
         >
           By continuing you agree to our{" "}
-          <Link to="/privacy" className="underline">
+          <button onClick={() => startTransition(() => navigate("/privacy"))} className="underline cursor-pointer bg-transparent border-none p-0 font-inherit text-inherit">
             Privacy Policy
-          </Link>{" "}
+          </button>{" "}
           and{" "}
-          <Link to="/terms" className="underline">
+          <button onClick={() => startTransition(() => navigate("/terms"))} className="underline cursor-pointer bg-transparent border-none p-0 font-inherit text-inherit">
             Terms of Service
-          </Link>
+          </button>
           .
         </motion.p>
       </div>

@@ -1,7 +1,8 @@
-import { useState, useCallback, useEffect, useRef } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useState, useCallback, useEffect, useRef, useTransition } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { pageVariants, popIn } from "@/lib/animations";
+import { popIn } from "@/lib/animations";
+import "./GamePage.css";
 import {
   getGroup,
   getActiveGame,
@@ -57,7 +58,36 @@ function sortByRecency(members: GroupMemberType[]): GroupMemberType[] {
 }
 
 /* ── animation variants ── */
-const fadeIn = pageVariants;
+
+/** Smooth crossfade for phase changes (no vertical shift). */
+const phaseFade = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { duration: 0.25, ease: "easeOut" as const } },
+  exit: { opacity: 0, transition: { duration: 0.18, ease: "easeIn" as const } },
+};
+
+/** Shared enter/exit for player list items (chips + unassigned rows). */
+const listItemVariants = {
+  hidden: { opacity: 0, scaleY: 0, height: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0 },
+  show: {
+    opacity: 1,
+    scaleY: 1,
+    height: "auto" as const,
+    marginBottom: "0.35rem",
+    paddingTop: "0.4rem",
+    paddingBottom: "0.4rem",
+    transition: { duration: 0.18, ease: "easeOut" as const },
+  },
+  exit: {
+    opacity: 0,
+    scaleY: 0,
+    height: 0,
+    marginBottom: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    transition: { duration: 0.15, ease: "easeIn" as const },
+  },
+};
 
 const scoreBump = {
   bump: {
@@ -69,6 +99,8 @@ const scoreBump = {
 /* ── component ── */
 function GamePage() {
   const { groupId } = useParams<{ groupId: string }>();
+  const navigate = useNavigate();
+  const [isNavPending, startNavTransition] = useTransition();
 
   // group data
   const [, setGroup] = useState<GroupDetail | null>(null);
@@ -199,7 +231,9 @@ function GamePage() {
   useEffect(() => {
     if (phase === "active") {
       timerRef.current = setInterval(() => {
-        const localDelta = Math.floor((Date.now() - serverFetchedAtRef.current) / 1000);
+        const localDelta = serverFetchedAtRef.current
+          ? Math.floor((Date.now() - serverFetchedAtRef.current) / 1000)
+          : 0;
         setElapsed(serverElapsedRef.current + localDelta);
       }, 250);
     } else {
@@ -308,6 +342,8 @@ function GamePage() {
       setRemoteGoalCount(0);
 
       await updateGame(groupId, game.id, { state: "active" });
+      serverElapsedRef.current = 0;
+      serverFetchedAtRef.current = Date.now();
       setPhase("active");
     } catch (e) {
       console.error("Failed to start game:", e);
@@ -484,6 +520,154 @@ function GamePage() {
   const isCompleted = phase === "completed";
   const isCancelled = phase === "cancelled";
 
+  /* ── shared side-picker UI (used in setup + post-game) ── */
+  const renderSidePicker = (actionLabel: string, onAction: () => void) => (
+    <>
+      <img src={vsBadge} alt="VS" className="gp-idle-badge" />
+      <h1 className="gp-idle-title">Pick Sides</h1>
+      <p className="gp-idle-sub">
+        Assign group members to Side&nbsp;A or Side&nbsp;B.
+        <br />
+        First to {SCORE_THRESHOLD} · win by {WIN_MARGIN}.
+      </p>
+
+      <div className="gp-team-picker">
+        {/* Side A */}
+        <div className="gp-pick-side gp-pick-side--a" role="group" aria-label="Side A players">
+          <h3 className="gp-pick-side-title gp-pick-side-title--a">Side A</h3>
+          <div className="gp-pick-list">
+            <AnimatePresence>
+              {sideA.map((m) => (
+                <motion.button
+                  key={m.user_id}
+                  variants={listItemVariants}
+                  initial="hidden"
+                  animate="show"
+                  exit="exit"
+                  className="gp-pick-chip gp-pick-chip--a"
+                  onClick={() => unassignPlayer(m)}
+                  aria-label={`Remove ${m.name} from Side A`}
+                >
+                  {m.image_url ? (
+                    <img
+                      src={resolveImageUrl(m.image_url) ?? ""}
+                      alt=""
+                      className="gp-pick-avatar"
+                    />
+                  ) : (
+                    <div className="gp-pick-avatar gp-pick-avatar--empty" />
+                  )}
+                  <span>{m.name}</span>
+                  <span className="gp-pick-x" aria-hidden>✕</span>
+                </motion.button>
+              ))}
+            </AnimatePresence>
+            {sideA.length === 0 && (
+              <p className="gp-pick-empty">Tap a player below to add</p>
+            )}
+          </div>
+        </div>
+
+        {/* Side B */}
+        <div className="gp-pick-side gp-pick-side--b" role="group" aria-label="Side B players">
+          <h3 className="gp-pick-side-title gp-pick-side-title--b">Side B</h3>
+          <div className="gp-pick-list">
+            <AnimatePresence>
+              {sideB.map((m) => (
+                <motion.button
+                  key={m.user_id}
+                  variants={listItemVariants}
+                  initial="hidden"
+                  animate="show"
+                  exit="exit"
+                  className="gp-pick-chip gp-pick-chip--b"
+                  onClick={() => unassignPlayer(m)}
+                  aria-label={`Remove ${m.name} from Side B`}
+                >
+                  {m.image_url ? (
+                    <img
+                      src={resolveImageUrl(m.image_url) ?? ""}
+                      alt=""
+                      className="gp-pick-avatar"
+                    />
+                  ) : (
+                    <div className="gp-pick-avatar gp-pick-avatar--empty" />
+                  )}
+                  <span>{m.name}</span>
+                  <span className="gp-pick-x" aria-hidden>✕</span>
+                </motion.button>
+              ))}
+            </AnimatePresence>
+            {sideB.length === 0 && (
+              <p className="gp-pick-empty">Tap a player below to add</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Unassigned players */}
+      {unassigned.length > 0 && (
+        <div className="gp-unassigned" role="group" aria-label="Available players">
+          <h4 className="gp-unassigned-title">Available Players</h4>
+          <div className="gp-unassigned-list">
+            <AnimatePresence>
+              {unassigned.map((m) => (
+                <motion.div
+                  key={m.user_id}
+                  variants={listItemVariants}
+                  initial="hidden"
+                  animate="show"
+                  exit="exit"
+                  className="gp-unassigned-player"
+                >
+                  {m.image_url ? (
+                    <img
+                      src={resolveImageUrl(m.image_url) ?? ""}
+                      alt=""
+                      className="gp-pick-avatar"
+                    />
+                  ) : (
+                    <div className="gp-pick-avatar gp-pick-avatar--empty" />
+                  )}
+                  <span className="gp-unassigned-name">{m.name}</span>
+                  <button
+                    className="gp-assign-btn gp-assign-btn--a"
+                    onClick={() => assignPlayer(m, "a")}
+                    aria-label={`Assign ${m.name} to Side A`}
+                  >
+                    → A
+                  </button>
+                  <button
+                    className="gp-assign-btn gp-assign-btn--b"
+                    onClick={() => assignPlayer(m, "b")}
+                    aria-label={`Assign ${m.name} to Side B`}
+                  >
+                    → B
+                  </button>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        </div>
+      )}
+
+      <button
+        className="gp-btn gp-btn--primary"
+        onClick={onAction}
+        disabled={sideA.length === 0 || sideB.length === 0 || saving}
+      >
+        {saving ? "Creating…" : actionLabel}
+      </button>
+
+      <button
+        className={`gp-btn ${isNavPending ? "animate-pulse" : ""}`}
+        onClick={() => startNavTransition(() => navigate(`/group/${groupId}`))}
+      >
+        ← Back to Group
+      </button>
+    </>
+  );
+
   /* ── progress toward win ── */
   const maxScore = Math.max(scoreA, scoreB, SCORE_THRESHOLD);
   const progressA = maxScore > 0 ? (scoreA / maxScore) * 50 : 0;
@@ -511,9 +695,9 @@ function GamePage() {
         </div>
         <div className="gp-bg" style={{ backgroundImage: `url(${liveBoardBg})` }} />
         <div className="gp-bg-overlay" />
-        <div className="gp-idle" style={{ zIndex: 2 }}>
-          <img src={noActiveGameImg} alt="" className="gp-overlay-img" style={{ opacity: 0.7 }} />
-          <p style={{ color: "#cbd5e1", fontSize: "1.1rem" }}>Loading game…</p>
+        <div className="gp-idle z-[2]">
+          <img src={noActiveGameImg} alt="" className="gp-overlay-img opacity-70" />
+          <p className="text-slate-300 text-lg">Loading game…</p>
         </div>
       </div>
     );
@@ -529,149 +713,26 @@ function GamePage() {
       <div className="gp-bg" style={{ backgroundImage: `url(${liveBoardBg})` }} />
       <div className="gp-bg-overlay" />
 
-      {/* ────── SETUP: SIDE SELECTION ────── */}
+      {/* ────── PHASE PANELS (mutually exclusive) ────── */}
       <AnimatePresence mode="wait">
         {phase === "setup" && (
           <motion.div
             key="setup"
             className="gp-setup"
-            variants={fadeIn}
+            variants={phaseFade}
             initial="hidden"
             animate="show"
             exit="exit"
           >
-            <img src={vsBadge} alt="VS" className="gp-idle-badge" />
-            <h1 className="gp-idle-title">Pick Sides</h1>
-            <p className="gp-idle-sub">
-              Assign group members to Side&nbsp;A or Side&nbsp;B.
-              <br />
-              First to {SCORE_THRESHOLD} · win by {WIN_MARGIN}.
-            </p>
-
-            <div className="gp-team-picker">
-              {/* Side A */}
-              <div className="gp-pick-side gp-pick-side--a">
-                <h3 className="gp-pick-side-title gp-pick-side-title--a">Side A</h3>
-                <div className="gp-pick-list">
-                  {sideA.map((m) => (
-                    <button
-                      key={m.user_id}
-                      className="gp-pick-chip gp-pick-chip--a"
-                      onClick={() => unassignPlayer(m)}
-                      title="Remove from Side A"
-                    >
-                      {m.image_url ? (
-                        <img
-                          src={resolveImageUrl(m.image_url) ?? ""}
-                          alt={m.name}
-                          className="gp-pick-avatar"
-                        />
-                      ) : (
-                        <div className="gp-pick-avatar gp-pick-avatar--empty" />
-                      )}
-                      <span>{m.name}</span>
-                      <span className="gp-pick-x">✕</span>
-                    </button>
-                  ))}
-                  {sideA.length === 0 && (
-                    <p className="gp-pick-empty">Tap a player below to add</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Side B */}
-              <div className="gp-pick-side gp-pick-side--b">
-                <h3 className="gp-pick-side-title gp-pick-side-title--b">Side B</h3>
-                <div className="gp-pick-list">
-                  {sideB.map((m) => (
-                    <button
-                      key={m.user_id}
-                      className="gp-pick-chip gp-pick-chip--b"
-                      onClick={() => unassignPlayer(m)}
-                      title="Remove from Side B"
-                    >
-                      {m.image_url ? (
-                        <img
-                          src={resolveImageUrl(m.image_url) ?? ""}
-                          alt={m.name}
-                          className="gp-pick-avatar"
-                        />
-                      ) : (
-                        <div className="gp-pick-avatar gp-pick-avatar--empty" />
-                      )}
-                      <span>{m.name}</span>
-                      <span className="gp-pick-x">✕</span>
-                    </button>
-                  ))}
-                  {sideB.length === 0 && (
-                    <p className="gp-pick-empty">Tap a player below to add</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Unassigned players */}
-            {unassigned.length > 0 && (
-              <div className="gp-unassigned">
-                <h4 className="gp-unassigned-title">Available Players</h4>
-                <div className="gp-unassigned-list">
-                  {unassigned.map((m) => (
-                    <div key={m.user_id} className="gp-unassigned-player">
-                      {m.image_url ? (
-                        <img
-                          src={resolveImageUrl(m.image_url) ?? ""}
-                          alt={m.name}
-                          className="gp-pick-avatar"
-                        />
-                      ) : (
-                        <div className="gp-pick-avatar gp-pick-avatar--empty" />
-                      )}
-                      <span className="gp-unassigned-name">{m.name}</span>
-                      <button
-                        className="gp-assign-btn gp-assign-btn--a"
-                        onClick={() => assignPlayer(m, "a")}
-                      >
-                        → A
-                      </button>
-                      <button
-                        className="gp-assign-btn gp-assign-btn--b"
-                        onClick={() => assignPlayer(m, "b")}
-                      >
-                        → B
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <motion.button
-              className="gp-start-btn"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={startGame}
-              disabled={sideA.length === 0 || sideB.length === 0 || saving}
-              style={{
-                opacity: sideA.length === 0 || sideB.length === 0 ? 0.4 : 1,
-              }}
-            >
-              {saving ? "Creating…" : "Start Match"}
-            </motion.button>
-
-            <Link to={`/group/${groupId}`} className="gp-back-link">
-              ← Back to Group
-            </Link>
+            {renderSidePicker("Start Match", startGame)}
           </motion.div>
         )}
-      </AnimatePresence>
 
-      {/* ────── ACTIVE / PAUSED ────── */}
-      <AnimatePresence>
         {(isActive || isPaused) && (
           <motion.div
             key="board"
             className="gp-board"
-            variants={fadeIn}
+            variants={phaseFade}
             initial="hidden"
             animate="show"
             exit="exit"
@@ -816,12 +877,76 @@ function GamePage() {
                 transition={{ type: "spring" as const, stiffness: 300, damping: 25 }}
               />
               <motion.div
-                className="gp-prog-fill gp-prog-fill--b"
-                style={{ marginLeft: "auto" }}
+                className="gp-prog-fill gp-prog-fill--b ml-auto"
                 animate={{ width: `${progressB}%` }}
                 transition={{ type: "spring" as const, stiffness: 300, damping: 25 }}
               />
             </div>
+          </motion.div>
+        )}
+
+        {(isCompleted || isCancelled) && (
+          <motion.div
+            key="finished"
+            className="gp-setup"
+            variants={phaseFade}
+            initial="hidden"
+            animate="show"
+            exit="exit"
+          >
+            {/* Result banner */}
+            {isCompleted && winner && (
+              <>
+                <motion.img
+                  src={winner === "a" ? victoryBanner : defeatBanner}
+                  alt="Banner"
+                  className="gp-result-banner"
+                  initial={{ scale: 0.5, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: "spring" as const, stiffness: 400, damping: 18 }}
+                />
+                <motion.h2
+                  className="gp-result-title"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  {winner === "a" ? sideALabel : sideBLabel} Wins!
+                </motion.h2>
+                <motion.p
+                  className="gp-result-final"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.35 }}
+                >
+                  {scoreA} – {scoreB} · {formatTime(elapsed)}
+                </motion.p>
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 }}
+                >
+                  <button
+                    className={`gp-btn gp-btn--primary ${isNavPending ? "animate-pulse" : ""}`}
+                    onClick={() => startNavTransition(() => navigate(`/leaderboard/${groupId}`))}
+                  >
+                    Go to Leaderboard
+                  </button>
+                </motion.div>
+              </>
+            )}
+            {isCancelled && (
+              <>
+                <img src={gameCancelledImg} alt="Cancelled" className="gp-overlay-img w-[120px] mb-2" />
+                <h2 className="gp-overlay-heading">Game Cancelled</h2>
+                <p className="gp-overlay-sub mb-4">
+                  {scoreA} – {scoreB} · {formatTime(elapsed)}
+                </p>
+              </>
+            )}
+
+            {/* Pick Sides (reused) */}
+            {renderSidePicker("Play Again", () => { resetToSetup(); startGame(); })}
           </motion.div>
         )}
       </AnimatePresence>
@@ -934,206 +1059,14 @@ function GamePage() {
             <img src={pauseOverlay} alt="Paused" className="gp-overlay-img" />
             <h2 className="gp-overlay-heading">Game Paused</h2>
             <p className="gp-overlay-time">{formatTime(elapsed)}</p>
-            <motion.button
-              className="gp-start-btn"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={togglePause}
-            >
+            <button className="gp-btn gp-btn--primary" onClick={togglePause}>
               Resume
-            </motion.button>
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ────── COMPLETED / CANCELLED: show setup with result banner ────── */}
-      <AnimatePresence mode="wait">
-        {(isCompleted || isCancelled) && (
-          <motion.div
-            key="finished"
-            className="gp-setup"
-            variants={fadeIn}
-            initial="hidden"
-            animate="show"
-            exit="exit"
-          >
-            {/* Result banner */}
-            {isCompleted && winner && (
-              <>
-                <motion.img
-                  src={winner === "a" ? victoryBanner : defeatBanner}
-                  alt="Banner"
-                  className="gp-result-banner"
-                  initial={{ scale: 0.5, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ type: "spring" as const, stiffness: 260, damping: 20 }}
-                />
-                <motion.h2
-                  className="gp-result-title"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                >
-                  {winner === "a" ? sideALabel : sideBLabel} Wins!
-                </motion.h2>
-                <motion.p
-                  className="gp-result-final"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.35 }}
-                >
-                  {scoreA} – {scoreB} · {formatTime(elapsed)}
-                </motion.p>
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5 }}
-                >
-                  <Link
-                    to={`/leaderboard/${groupId}`}
-                    className="gp-start-btn"
-                    style={{ display: "inline-block", textDecoration: "none", marginTop: 12 }}
-                  >
-                    Go to Leaderboard
-                  </Link>
-                </motion.div>
-              </>
-            )}
-            {isCancelled && (
-              <>
-                <img src={gameCancelledImg} alt="Cancelled" className="gp-overlay-img" style={{ width: 120, marginBottom: 8 }} />
-                <h2 className="gp-overlay-heading">Game Cancelled</h2>
-                <p className="gp-overlay-sub" style={{ marginBottom: 16 }}>
-                  {scoreA} – {scoreB} · {formatTime(elapsed)}
-                </p>
-              </>
-            )}
 
-            {/* Pick Sides header */}
-            <img src={vsBadge} alt="VS" className="gp-idle-badge" />
-            <h1 className="gp-idle-title">Pick Sides</h1>
-            <p className="gp-idle-sub">
-              Assign group members to Side&nbsp;A or Side&nbsp;B.
-              <br />
-              First to {SCORE_THRESHOLD} · win by {WIN_MARGIN}.
-            </p>
-
-            <div className="gp-team-picker">
-              {/* Side A */}
-              <div className="gp-pick-side gp-pick-side--a">
-                <h3 className="gp-pick-side-title gp-pick-side-title--a">Side A</h3>
-                <div className="gp-pick-list">
-                  {sideA.map((m) => (
-                    <button
-                      key={m.user_id}
-                      className="gp-pick-chip gp-pick-chip--a"
-                      onClick={() => unassignPlayer(m)}
-                      title="Remove from Side A"
-                    >
-                      {m.image_url ? (
-                        <img
-                          src={resolveImageUrl(m.image_url) ?? ""}
-                          alt={m.name}
-                          className="gp-pick-avatar"
-                        />
-                      ) : (
-                        <div className="gp-pick-avatar gp-pick-avatar--empty" />
-                      )}
-                      <span>{m.name}</span>
-                      <span className="gp-pick-x">✕</span>
-                    </button>
-                  ))}
-                  {sideA.length === 0 && (
-                    <p className="gp-pick-empty">Tap a player below to add</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Side B */}
-              <div className="gp-pick-side gp-pick-side--b">
-                <h3 className="gp-pick-side-title gp-pick-side-title--b">Side B</h3>
-                <div className="gp-pick-list">
-                  {sideB.map((m) => (
-                    <button
-                      key={m.user_id}
-                      className="gp-pick-chip gp-pick-chip--b"
-                      onClick={() => unassignPlayer(m)}
-                      title="Remove from Side B"
-                    >
-                      {m.image_url ? (
-                        <img
-                          src={resolveImageUrl(m.image_url) ?? ""}
-                          alt={m.name}
-                          className="gp-pick-avatar"
-                        />
-                      ) : (
-                        <div className="gp-pick-avatar gp-pick-avatar--empty" />
-                      )}
-                      <span>{m.name}</span>
-                      <span className="gp-pick-x">✕</span>
-                    </button>
-                  ))}
-                  {sideB.length === 0 && (
-                    <p className="gp-pick-empty">Tap a player below to add</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Unassigned players */}
-            {unassigned.length > 0 && (
-              <div className="gp-unassigned">
-                <h4 className="gp-unassigned-title">Available Players</h4>
-                <div className="gp-unassigned-list">
-                  {unassigned.map((m) => (
-                    <div key={m.user_id} className="gp-unassigned-player">
-                      {m.image_url ? (
-                        <img
-                          src={resolveImageUrl(m.image_url) ?? ""}
-                          alt={m.name}
-                          className="gp-pick-avatar"
-                        />
-                      ) : (
-                        <div className="gp-pick-avatar gp-pick-avatar--empty" />
-                      )}
-                      <span className="gp-unassigned-name">{m.name}</span>
-                      <button
-                        className="gp-assign-btn gp-assign-btn--a"
-                        onClick={() => assignPlayer(m, "a")}
-                      >
-                        → A
-                      </button>
-                      <button
-                        className="gp-assign-btn gp-assign-btn--b"
-                        onClick={() => assignPlayer(m, "b")}
-                      >
-                        → B
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <motion.button
-              className="gp-start-btn"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => { resetToSetup(); startGame(); }}
-              disabled={sideA.length === 0 || sideB.length === 0 || saving}
-              style={{
-                opacity: sideA.length === 0 || sideB.length === 0 ? 0.4 : 1,
-              }}
-            >
-              {saving ? "Creating…" : "Play Again"}
-            </motion.button>
-
-            <Link to={`/group/${groupId}`} className="gp-back-link">
-              ← Back to Group
-            </Link>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

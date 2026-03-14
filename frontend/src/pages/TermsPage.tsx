@@ -1,5 +1,5 @@
-import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
+import LinkButton from "@/components/LinkButton";
 import PageTransition from "@/components/PageTransition";
 
 function TermsPage() {
@@ -56,9 +56,10 @@ function TermsPage() {
       </main>
 
       <div className="mt-6">
-        <Button variant="outline" asChild>
-          <Link to="/">Go back to Home Page</Link>
-        </Button>
+        <LinkButton variant="outline" to="/">
+          <ArrowLeft className="size-4" />
+          Back to Home
+        </LinkButton>
       </div>
     </PageTransition>
   );
