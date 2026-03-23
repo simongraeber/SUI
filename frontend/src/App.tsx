@@ -4,6 +4,7 @@ import { AuthProvider } from "./lib/AuthContext";
 import RequireAuth from "./components/RequireAuth";
 import RequireGroupMember from "./components/RequireGroupMember";
 import LoadingState from "./components/LoadingState";
+import ErrorBoundary from "./components/ErrorBoundary";
 import Footer from "./components/Footer";
 import { Toaster } from "@/components/ui/sonner";
 import "./App.css";
@@ -14,17 +15,15 @@ function ScrollToTop() {
   return null;
 }
 
-/* ── Eagerly loaded (landing page — critical for FCP) ── */
 import HomePage from "./pages/HomePage";
 
-/* ── Lazy-loaded pages (code-split into separate chunks) ── */
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const GroupPage = lazy(() => import("./pages/GroupPage"));
 const JoinGroupPage = lazy(() => import("./pages/JoinGroupPage"));
 const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
-const PlayerPage = lazy(() => import("./pages/PlayerPage"));
+const PlayerPage = lazy(() => import("./pages/MemberPage"));
 const GamePage = lazy(() => import("./pages/GamePage"));
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 const ImprintPage = lazy(() => import("./pages/ImprintPage"));
@@ -39,16 +38,15 @@ function App() {
         <Toaster position="top-right" richColors />
         <div className="flex flex-col min-h-screen bg-[var(--footer-bg)]">
           <main className="flex-1">
+            <ErrorBoundary>
             <Suspense fallback={<LoadingState />}>
               <Routes>
-              {/* Public */}
               <Route path="/" element={<HomePage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/imprint" element={<ImprintPage />} />
               <Route path="/privacy" element={<PrivacyPage />} />
               <Route path="/terms" element={<TermsPage />} />
 
-              {/* Authenticated */}
               <Route element={<RequireAuth />}>
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
@@ -57,7 +55,6 @@ function App() {
                 <Route path="/leaderboard/:groupId" element={<LeaderboardPage />} />
                 <Route path="/group/:groupId/member/:memberId" element={<PlayerPage />} />
 
-                {/* Group-member-only routes */}
                 <Route element={<RequireGroupMember />}>
                   <Route path="/game/:groupId" element={<GamePage />} />
                 </Route>
@@ -66,6 +63,7 @@ function App() {
               <Route path="*" element={<NotFoundPage />} />
             </Routes>
             </Suspense>
+            </ErrorBoundary>
           </main>
           <Footer />
         </div>

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -11,6 +11,13 @@ from app.models import Base
 
 class Game(Base):
     __tablename__ = "games"
+    __table_args__ = (
+        CheckConstraint("winner IN ('a', 'b')", name="ck_game_winner"),
+        CheckConstraint(
+            "state IN ('setup', 'active', 'paused', 'completed', 'cancelled')",
+            name="ck_game_state",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -19,19 +26,19 @@ class Game(Base):
         UUID(as_uuid=True), ForeignKey("groups.id", ondelete="CASCADE"), nullable=False,
         index=True,
     )
-    # idle | setup | active | paused | completed | cancelled
+    # setup | active | paused | completed | cancelled
     state: Mapped[str] = mapped_column(String, nullable=False, default="setup")
     score_a: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     score_b: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     elapsed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)  # accumulated seconds while paused
     winner: Mapped[str | None] = mapped_column(String, nullable=True)  # "a" | "b" | null
     goal_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    started_at = mapped_column(DateTime(timezone=True), nullable=True)  # set when active, cleared on pause
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
-    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at = mapped_column(
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
@@ -95,7 +102,7 @@ class GameGoal(Base):
     side: Mapped[str] = mapped_column(String, nullable=False)  # which side gets the point
     friendly_fire: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     elapsed_at: Mapped[int] = mapped_column(Integer, nullable=False)  # seconds when goal was scored
-    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # relationships
     game: Mapped["Game"] = relationship("Game", back_populates="goals")

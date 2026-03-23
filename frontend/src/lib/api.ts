@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
+const API_BASE = import.meta.env.VITE_API_URL ?? "/api/v1";
 
 /**
  * Resolve an image_url (which may be a relative /api/v1/... path) to a full URL.

@@ -10,6 +10,19 @@ from app.services.auth import create_access_token, verify_google_token, exchange
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+async def _get_or_create_user(google_user: dict, db: AsyncSession) -> User:
+    result = await db.execute(
+        select(User).where(User.google_id == google_user["google_id"])
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        user = User(**google_user)
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+    return user
+
+
 @router.post("/google", response_model=TokenResponse)
 async def google_login(body: GoogleTokenRequest, db: AsyncSession = Depends(get_db)):
     """Exchange a Google ID token for a JWT access token."""
@@ -18,19 +31,7 @@ async def google_login(body: GoogleTokenRequest, db: AsyncSession = Depends(get_
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Google token"
         )
-
-    # Find or create user
-    result = await db.execute(
-        select(User).where(User.google_id == google_user["google_id"])
-    )
-    user = result.scalar_one_or_none()
-
-    if user is None:
-        user = User(**google_user)
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
-
+    user = await _get_or_create_user(google_user, db)
     return TokenResponse(access_token=create_access_token(str(user.id)))
 
 
@@ -42,17 +43,5 @@ async def google_code_login(body: GoogleCodeRequest, db: AsyncSession = Depends(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Google authorization code"
         )
-
-    # Find or create user
-    result = await db.execute(
-        select(User).where(User.google_id == google_user["google_id"])
-    )
-    user = result.scalar_one_or_none()
-
-    if user is None:
-        user = User(**google_user)
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
-
+    user = await _get_or_create_user(google_user, db)
     return TokenResponse(access_token=create_access_token(str(user.id)))

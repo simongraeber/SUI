@@ -239,7 +239,7 @@ function ProfilePage() {
       {statsLoading ? (
         <div className="grid grid-cols-3 gap-3 mb-8 max-w-md mx-auto">
           {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-[90px] w-full rounded-xl" />
+            <Skeleton key={i} className="h-[106px] w-full rounded-xl" />
           ))}
         </div>
       ) : (

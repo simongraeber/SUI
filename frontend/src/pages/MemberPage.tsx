@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { revealY } from "@/lib/animations";
+import { fadeUp, revealY } from "@/lib/animations";
 import { FormDots } from "@/components/FormDots";
 import { eloColor } from "@/lib/utils";
 import { useAuth } from "@/lib/AuthContext";
@@ -21,6 +21,7 @@ import {
   type GameResponse,
   type GroupMember,
 } from "@/lib/api";
+import { Button } from "@/components/ui/button";
 
 /* ── Stat row helper ── */
 function StatRow({ label, value, color }: { label: string; value: string | number; color?: string }) {
@@ -32,7 +33,7 @@ function StatRow({ label, value, color }: { label: string; value: string | numbe
   );
 }
 
-function PlayerPage() {
+function MemberPage() {
   const { groupId, memberId: userId } = useParams<{ groupId: string; memberId: string }>();
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
@@ -133,7 +134,14 @@ function PlayerPage() {
               </span>
             )}
           </div>
-          <h1 className="text-lg font-bold text-center">{member!.name}</h1>
+            <motion.h1
+              className="text-lg font-bold text-center"
+              variants={fadeUp}
+              initial="hidden"
+              animate="show"
+            >
+              {member!.name}
+            </motion.h1>
           <p className="text-sm text-muted-foreground mt-2">No games played yet.</p>
         </div>
 
@@ -169,12 +177,22 @@ function PlayerPage() {
               fallbackClassName="text-3xl"
             />
           {isOwnProfile && (
-            <span className="absolute bottom-2 right-0 bg-primary text-primary-foreground rounded-full p-1 shadow group-hover:scale-110 transition-transform">
+            <Button
+              aria-label="Edit Profile"
+              className="absolute bottom-2 right-0 w-6 h-6 bg-primary text-primary-foreground rounded-full p-0 flex items-center justify-center shadow group-hover:scale-110 transition-transform"
+            >
               <Pencil className="size-3.5" />
-            </span>
+            </Button>
           )}
         </div>
-        <h1 className="text-lg font-bold text-center">{player.name}</h1>
+          <motion.h1
+            className="text-lg font-bold text-center"
+            variants={fadeUp}
+            initial="hidden"
+            animate="show"
+          >
+            {member!.name}
+          </motion.h1>
         {player.provisional && (
           <motion.div
             variants={revealY}
@@ -318,4 +336,4 @@ function PlayerPage() {
   );
 }
 
-export default PlayerPage;
+export default MemberPage;

@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -13,17 +14,17 @@ class GameCreate(BaseModel):
 
 class GameUpdate(BaseModel):
     """Partial update for game state (score, status, etc.)."""
-    state: str | None = None  # active | paused | completed | cancelled
+    state: Literal["active", "paused", "completed", "cancelled"] | None = None
     score_a: int | None = None
     score_b: int | None = None
     elapsed: int | None = None
-    winner: str | None = None
+    winner: Literal["a", "b"] | None = None
 
 
 class GameGoalCreate(BaseModel):
     """Record a goal with scorer info."""
     scored_by: UUID        # user_id of the player who scored
-    side: str              # which side gets the point ("a" | "b")
+    side: Literal["a", "b"]  # which side gets the point
     friendly_fire: bool = False
     elapsed_at: int        # elapsed seconds when goal was scored
 

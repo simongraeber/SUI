@@ -32,7 +32,7 @@ import PageTransition from "@/components/PageTransition";
 import LinkButton from "@/components/LinkButton";
 import AskAI from "@/components/AskAI";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cardSlideUp, staggerContainer } from "@/lib/animations";
+import { cardSlideUp, fadeUp, staggerContainer } from "@/lib/animations";
 import {
   Table,
   TableBody,
@@ -406,7 +406,7 @@ function LeaderboardPage() {
 
   if (!loading && !stats) return null;
 
-  const showSkeleton = loading && !stats;
+  const showSkeleton = loading;
 
   return (
     <PageTransition className="max-w-4xl mx-auto px-4 py-8">
@@ -440,11 +440,19 @@ function LeaderboardPage() {
           ))}
         </div>
       ) : stats!.total_games === 0 ? (
-        <Card className="mb-8">
-          <CardContent className="py-8 text-center text-muted-foreground italic">
-            No games played{isPeriod ? " in this period" : " yet"}.
-          </CardContent>
-        </Card>
+        <motion.div
+          key={period}
+          variants={fadeUp}
+          initial="hidden"
+          animate="show"
+        >
+          <Card className="mb-8 h-[244px] sm:h-[116px]">
+            <CardContent className="h-full flex flex-col items-center justify-center text-muted-foreground italic">
+              <Gamepad2 className="size-8 mb-2 text-muted-foreground/50" />
+              No games played{isPeriod ? " in this period" : " yet"}.
+            </CardContent>
+          </Card>
+        </motion.div>
       ) : (
         <motion.div
           className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8"

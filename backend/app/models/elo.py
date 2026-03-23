@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, Boolean, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
@@ -27,7 +28,7 @@ class PlayerRating(Base):
     elo: Mapped[float] = mapped_column(Float, nullable=False, default=1000.0)
     games_played: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     provisional: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    updated_at = mapped_column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
@@ -60,4 +61,4 @@ class EloHistory(Base):
     elo_before: Mapped[float] = mapped_column(Float, nullable=False)
     elo_after: Mapped[float] = mapped_column(Float, nullable=False)
     delta: Mapped[float] = mapped_column(Float, nullable=False)
-    created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -25,9 +25,9 @@ function ImprintPage() {
         animate="show"
       >
         <motion.div variants={popIn}>
-          <Card className="relative overflow-hidden mb-8">
+          <Card className="relative mb-8">
         {/* Gradient glow */}
-        <div className="absolute top-0 left-0 w-40 h-40 rounded-full bg-gradient-to-br from-[var(--imprint-glow-from)] to-[var(--imprint-glow-to)] blur-[40px]" />
+        <div className="absolute overflow-hidden top-0 left-0 w-40 h-40 rounded-full bg-gradient-to-br from-[var(--imprint-glow-from)] to-[var(--imprint-glow-to)] blur-[40px]" />
 
         <CardContent className="relative z-10 flex flex-col md:flex-row items-center gap-6 p-8">
           {/* Logo & Animation */}

@@ -11,7 +11,7 @@ A mobile-first web app for tracking competitive team games (starting with *Tisch
 
 - Docker & Docker Compose
 - A [Google OAuth 2.0](https://console.cloud.google.com/apis/credentials) client ID / secret
-- (Optional) A [Gemini API key](https://aistudio.google.com/apikey) for AI-generated player avatars
+- (Optional) A [Gemini API key](https://aistudio.google.com/apikey) for AI-generated player avatars and data analysis.
 
 ### Run with Docker Compose
 

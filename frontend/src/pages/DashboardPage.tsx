@@ -11,7 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import UserAvatar from "@/components/UserAvatar";
-import { Plus, Users, Gamepad2 } from "lucide-react";
+import { Plus, Users, Gamepad2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import PageTransition from "@/components/PageTransition";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -61,9 +61,10 @@ function GroupCard({ group, members }: { group: GroupSummary; members: GroupMemb
 
   return (
     <motion.div variants={fadeUp}>
-      <div
+      <button
         onClick={() => startTransition(() => navigate(`/group/${group.id}`))}
-        className="cursor-pointer"
+        aria-label={`View Group ${group.name}`}
+        className="cursor-pointer w-full"
       >
         <Card className={`transition-all hover:-translate-y-0.5 hover:shadow-md ${isPending ? "animate-pulse" : ""}`}>
           <div className="flex items-center gap-3 px-4 py-3">
@@ -95,7 +96,7 @@ function GroupCard({ group, members }: { group: GroupSummary; members: GroupMemb
             </div>
           </div>
         </Card>
-      </div>
+      </button>
     </motion.div>
   );
 }
@@ -152,14 +153,14 @@ function DashboardPage() {
       {/* Header with profile avatar */}
       <div className="flex flex-col sm:flex-row items-center justify-between mb-8 gap-4">
         <div className="hidden sm:block flex-1" />
-        <div className="text-center flex-1">
-          <h1 className="text-3xl font-bold mb-1">Dashboard</h1>
-          <p className="text-muted-foreground text-sm">Your game hub at a glance.</p>
-        </div>
+          <div className="text-center flex-1">
+            <h1 className="text-3xl font-bold mb-1">Dashboard</h1>
+            <p className="text-muted-foreground text-sm">Your game hub at a glance.</p>
+          </div>
         <div className="flex-1 flex justify-center sm:justify-end">
           <div
             onClick={() => startProfileTransition(() => navigate('/profile'))}
-            className="cursor-pointer"
+            className="relative cursor-pointer group"
           >
             <UserAvatar
               name={user?.name}
@@ -167,6 +168,12 @@ function DashboardPage() {
               className={`h-20 w-20 border-2 border-border hover:border-primary transition-colors cursor-pointer ${isProfilePending ? "animate-pulse" : ""}`}
               fallbackClassName="text-sm"
             />
+            <Button
+              aria-label="Edit Profile"
+              className="absolute bottom-0 right-0 w-6 h-6 bg-primary text-primary-foreground rounded-full p-0 flex items-center justify-center shadow group-hover:scale-110 transition-transform"
+            >
+              <Pencil className="size-3.5" />
+            </Button>
           </div>
         </div>
       </div>
@@ -178,7 +185,7 @@ function DashboardPage() {
       {loading ? (
         <div className="flex flex-col gap-4 mb-6">
           {Array.from({ length: 2 }).map((_, i) => (
-            <Skeleton key={i} className="h-[71px] w-full rounded-2xl" />
+            <Skeleton key={i} className="h-[72px] w-full rounded-2xl" />
           ))}
         </div>
       ) : groups.length === 0 ? (

@@ -716,7 +716,7 @@
 .gp-pick-list {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 0.4rem;
 }
 
 /* player chip */
@@ -724,10 +724,8 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0 0.6rem;
+  padding: 0.4rem 0.6rem;
   border-radius: 12px;
-  overflow: hidden;
-  transform-origin: top;
   background: var(--gp-glass);
   border: 1px solid var(--gp-glass-border);
   color: #e2e8f0;
@@ -787,16 +785,14 @@
 .gp-unassigned-list {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 0.35rem;
 }
 .gp-unassigned-player {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0 0.65rem;
+  padding: 0.45rem 0.65rem;
   border-radius: 12px;
-  overflow: hidden;
-  transform-origin: top;
   background: var(--gp-glass);
   border: 1px solid var(--gp-glass-border);
 }

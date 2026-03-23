@@ -5,7 +5,7 @@ called both at game-completion time and during backfill.
 """
 
 import uuid
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -93,6 +93,13 @@ async def update_elo_for_game(
     """
     player_ids = [gp.user_id for gp in game.players]
 
+    # Guard: prevent double Elo updates for the same game
+    existing_history = await db.execute(
+        select(EloHistory.id).where(EloHistory.game_id == game.id).limit(1)
+    )
+    if existing_history.scalar_one_or_none() is not None:
+        return {}
+
     # Fetch existing ratings
     result = await db.execute(
         select(PlayerRating).where(
@@ -158,17 +165,12 @@ async def backfill_elo_for_group(
     from app.models.elo import EloHistory, PlayerRating  # avoid circular at module level
 
     # Clear existing data for this group
-    existing_history = await db.execute(
-        select(EloHistory).where(EloHistory.group_id == group_id)
+    await db.execute(
+        delete(EloHistory).where(EloHistory.group_id == group_id)
     )
-    for row in existing_history.scalars().all():
-        await db.delete(row)
-
-    existing_ratings = await db.execute(
-        select(PlayerRating).where(PlayerRating.group_id == group_id)
+    await db.execute(
+        delete(PlayerRating).where(PlayerRating.group_id == group_id)
     )
-    for row in existing_ratings.scalars().all():
-        await db.delete(row)
 
     await db.flush()
 

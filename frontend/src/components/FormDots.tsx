@@ -1,4 +1,3 @@
-/** Colored dots representing recent win/loss form. */
 function FormDots({ form, size = "sm" }: { form: string[]; size?: "sm" | "md" }) {
   if (!form.length) return <span className="text-muted-foreground text-sm">—</span>;
   const dotSize = size === "md" ? "size-3" : "size-2.5";

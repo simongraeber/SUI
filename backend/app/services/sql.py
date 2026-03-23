@@ -5,12 +5,10 @@ import uuid
 import logging
 
 from fastapi import HTTPException, status
-from sqlalchemy import text, select
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import ro_engine
-from app.models.group import GroupMember
-from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -125,19 +123,3 @@ async def execute_readonly_sql(
             rows = [list(row) for row in result.fetchmany(max_rows)]
     return columns, rows
 
-
-async def assert_group_membership(
-    group_id: uuid.UUID, user: User, db: AsyncSession,
-) -> None:
-    """Raise 403 if the user is not a member of the group."""
-    result = await db.execute(
-        select(GroupMember).where(
-            GroupMember.group_id == group_id,
-            GroupMember.user_id == user.id,
-        )
-    )
-    if result.scalar_one_or_none() is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not a member of this group",
-        )

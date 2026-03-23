@@ -21,20 +21,41 @@ IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
 router = APIRouter(prefix="/images", tags=["images"])
 
+_IMAGE_PROMPT = (
+    "Close-up macro photograph of a real foosball table player figure "
+    ", shot from the shoulders up like an ID card photo. "
+    "The figure is a complete full-body foosball player but the camera is zoomed in on the face. "
+    "Match the person's hair color, hair style, skin tone, eye color, and clothing style. "
+    "Entire figure is rigid, molded, glossy hard plastic with visible paint strokes, chips, and scratches. "
+    "Nose is a small rounded plastic bump. Ears are small molded bumps. "
+    "Hair is a solid molded plastic shape painted to match original color. "
+    "Background is pure solid white. "
+    "Extreme macro photography, high-contrast studio lighting. --ar 1:1"
+)
+
+
+_gemini_client: genai.Client | None = None
+
 
 def _get_gemini_client() -> genai.Client:
+    global _gemini_client
     if not settings.gemini_api_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Gemini API key is not configured",
         )
-    return genai.Client(api_key=settings.gemini_api_key)
+    if _gemini_client is None:
+        _gemini_client = genai.Client(api_key=settings.gemini_api_key)
+    return _gemini_client
 
 
 @router.get("/{image_id}")
 async def get_image(image_id: str):
     """Serve a previously saved image by its ID."""
-    # Sanitise: only allow uuid-shaped filenames
+    try:
+        uuid.UUID(image_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid image ID")
     path = IMAGES_DIR / f"{image_id}.png"
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Image not found")
@@ -46,12 +67,7 @@ async def generate_image(
     image: UploadFile = File(...),
     _user: User = Depends(get_current_user),
 ):
-    """
-    Accept a user-uploaded image and transform it using the globally
-    configured prompt via Google Gemini image generation.
-
-    The prompt is set globally in the GEMINI_IMAGE_PROMPT env var / config.
-    """
+    """Accept a user-uploaded image and transform it via Gemini image generation."""
     # Validate uploaded file is an image
     if image.content_type not in ("image/png", "image/jpeg", "image/webp"):
         raise HTTPException(
@@ -77,7 +93,7 @@ async def generate_image(
         "bright green", "bright blue", "bright yellow", "bright magenta",
         "dark red", "dark blue", "dark green", "dark yellow", "dark magenta"
     ]
-    prompt = settings.gemini_image_prompt.replace(
+    prompt = _IMAGE_PROMPT.replace(
         "pure solid white", f"pure solid {random.choice(BG_COLORS)}"
     )
 
@@ -95,11 +111,11 @@ async def generate_image(
                 ),
             ),
         )
-    except Exception as exc:
-        logger.exception("Gemini API call failed")
+    except Exception as exca:
+        logger.exception("Gemini API call failed %s", exca)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Image generation failed: {exc}",
+            detail="Image generation failed. Please try again.",
         )
 
     # Extract the generated image from the response

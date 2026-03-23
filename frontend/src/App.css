@@ -1,14 +1,4 @@
-/*
- * ═══════════════════════════════════════════════════════════════
- * App.css — Custom styles that complement Tailwind + shadcn/ui
- *
- * Only sections that require complex gradients, viewport tricks,
- * or highly specialised layouts remain here.  Everything else
- * has been migrated to Tailwind utilities and shadcn components.
- * ═══════════════════════════════════════════════════════════════
- */
-
-/* ──────────── Hero ──────────── */
+/* ── Hero ── */
 .hero {
   display: flex;
   flex-direction: column;
@@ -55,7 +45,7 @@
   }
 }
 
-/* ──────────── Section ──────────── */
+/* ── Section ── */
 .section {
   padding: 3rem 1.5rem;
   max-width: 960px;
@@ -92,7 +82,7 @@
   }
 }
 
-/* ──────────── Feature Grid ──────────── */
+/* ── Feature Grid ── */
 .features-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -105,14 +95,14 @@
   }
 }
 
-/* ──────────── Steps ──────────── */
+/* ── Steps ── */
 .steps {
   display: flex;
   flex-direction: column;
   gap: 2.5rem;
 }
 
-/* ──────────── CTA Section ──────────── */
+/* ── CTA Section ── */
 .cta-section {
   text-align: center;
   padding: 4rem 1.5rem;
@@ -143,7 +133,7 @@
   }
 }
 
-/* ──────────── Legal Content ──────────── */
+/* ── Legal Content ── */
 .legal-content {
   max-width: 42rem;
   margin: 1rem auto;
@@ -175,7 +165,7 @@
   margin-bottom: 0.25rem;
 }
 
-/* ──────────── Login Page ──────────── */
+/* ── Login Page ── */
 .login-page {
   display: flex;
   flex-direction: column;

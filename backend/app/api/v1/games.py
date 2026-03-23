@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, assert_group_membership
 from app.database import get_db
 from app.models.game import Game, GameGoal, GamePlayer
 from app.models.group import GroupMember
@@ -24,25 +24,11 @@ from app.schemas.game import (
 
 router = APIRouter(prefix="/groups/{group_id}/games", tags=["games"])
 
+SCORE_THRESHOLD = 10
+WIN_MARGIN = 2
+
 
 # ── helpers ──────────────────────────────────────────────────
-async def _assert_group_membership(
-    group_id: uuid.UUID, user: User, db: AsyncSession
-) -> GroupMember:
-    result = await db.execute(
-        select(GroupMember).where(
-            GroupMember.group_id == group_id, GroupMember.user_id == user.id
-        )
-    )
-    member = result.scalar_one_or_none()
-    if member is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not a member of this group",
-        )
-    return member
-
-
 async def _get_game_or_404(
     game_id: uuid.UUID, group_id: uuid.UUID, db: AsyncSession
 ) -> Game:
@@ -110,7 +96,7 @@ async def create_game(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new game with player assignments for Side A and Side B."""
-    await _assert_group_membership(group_id, user, db)
+    await assert_group_membership(group_id, user, db)
 
     if not body.side_a or not body.side_b:
         raise HTTPException(
@@ -157,7 +143,7 @@ async def list_games(
     db: AsyncSession = Depends(get_db),
 ):
     """List all games for a group (most recent first)."""
-    await _assert_group_membership(group_id, user, db)
+    await assert_group_membership(group_id, user, db)
 
     result = await db.execute(
         select(Game)
@@ -188,7 +174,7 @@ async def list_player_games(
     db: AsyncSession = Depends(get_db),
 ):
     """List recent completed games for a specific player in a group."""
-    await _assert_group_membership(group_id, user, db)
+    await assert_group_membership(group_id, user, db)
 
     # Find game IDs where this player participated
     player_game_ids = select(GamePlayer.game_id).where(
@@ -217,7 +203,7 @@ async def get_active_game(
     db: AsyncSession = Depends(get_db),
 ):
     """Get the currently active (or setup/paused) game for the group, if any."""
-    await _assert_group_membership(group_id, user, db)
+    await assert_group_membership(group_id, user, db)
 
     result = await db.execute(
         select(Game)
@@ -243,7 +229,7 @@ async def get_game(
     db: AsyncSession = Depends(get_db),
 ):
     """Get full game state (used for live polling)."""
-    await _assert_group_membership(group_id, user, db)
+    await assert_group_membership(group_id, user, db)
     game = await _get_game_or_404(game_id, group_id, db)
     return _build_response(game)
 
@@ -257,7 +243,7 @@ async def update_game(
     db: AsyncSession = Depends(get_db),
 ):
     """Update game state (score, status, elapsed, winner)."""
-    await _assert_group_membership(group_id, user, db)
+    await assert_group_membership(group_id, user, db)
     game = await _get_game_or_404(game_id, group_id, db)
 
     if game.state in ("completed", "cancelled"):
@@ -330,7 +316,7 @@ async def record_goal(
     db: AsyncSession = Depends(get_db),
 ):
     """Record a goal, update scores, and check for win."""
-    await _assert_group_membership(group_id, user, db)
+    await assert_group_membership(group_id, user, db)
     game = await _get_game_or_404(game_id, group_id, db)
 
     if game.state != "active":
@@ -358,16 +344,14 @@ async def record_goal(
     game.goal_count += 1
 
     # Check for win (first to SCORE_THRESHOLD, win by WIN_MARGIN)
-    score_threshold = 10
-    win_margin = 2
     if (
-        game.score_a >= score_threshold
-        and game.score_a - game.score_b >= win_margin
+        game.score_a >= SCORE_THRESHOLD
+        and game.score_a - game.score_b >= WIN_MARGIN
     ):
         game.winner = "a"
     elif (
-        game.score_b >= score_threshold
-        and game.score_b - game.score_a >= win_margin
+        game.score_b >= SCORE_THRESHOLD
+        and game.score_b - game.score_a >= WIN_MARGIN
     ):
         game.winner = "b"
 
@@ -405,7 +389,7 @@ async def delete_goal(
     db: AsyncSession = Depends(get_db),
 ):
     """Undo a goal: remove the GameGoal record and adjust score/goal_count."""
-    await _assert_group_membership(group_id, user, db)
+    await assert_group_membership(group_id, user, db)
     game = await _get_game_or_404(game_id, group_id, db)
 
     if game.state not in ("active", "paused"):

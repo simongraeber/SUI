@@ -13,7 +13,6 @@ import { askQuestion, resolveImageUrl, type AskResponse, type AIComponent, ApiEr
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
-/* ── Icon + color mapping ── */
 const ICON_MAP: Record<string, LucideIcon> = {
   goal: Goal,
   flame: Flame,
@@ -48,9 +47,6 @@ const EXAMPLE_QUESTIONS = [
   "Who wins most often on side A?",
 ];
 
-/* ── Component Renderers ── */
-
-/** Renders 1+ overlapping avatars from an image_urls array */
 function AvatarStack({ urls, name, size = "sm" }: { urls?: string[]; name: string; size?: "sm" | "md" }) {
   const resolved = (urls ?? []).map(resolveImageUrl).filter(Boolean) as string[];
   if (resolved.length === 0) return null;
@@ -258,7 +254,6 @@ function HeadToHeadCard({ player_a, player_b, stats }: Extract<AIComponent, { ty
   );
 }
 
-/* ── Apple-style Shimmer Border ── */
 function AIShimmerBorder({
   active = false,
   borderWidth = 2,
@@ -316,7 +311,6 @@ function AIComponentRenderer({ component }: { component: AIComponent }) {
   }
 }
 
-/* ── Main component ── */
 function AskAI({ groupId }: { groupId: string }) {
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
