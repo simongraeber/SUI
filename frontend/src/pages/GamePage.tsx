@@ -511,26 +511,36 @@ function GamePage() {
         <div className="gp-pick-side gp-pick-side--a">
           <h3 className="gp-pick-side-title gp-pick-side-title--a">Side A</h3>
           <div className="gp-pick-list">
+            <AnimatePresence initial={false}>
             {sideA.map((m) => (
-              <button
+              <motion.div
                 key={m.user_id}
-                className="gp-pick-chip gp-pick-chip--a"
-                onClick={() => unassignPlayer(m)}
-                title="Remove from Side A"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.25, ease: "easeInOut" }}
+                style={{ overflow: "hidden" }}
               >
-                {m.image_url ? (
-                  <img
-                    src={resolveImageUrl(m.image_url) ?? ""}
-                    alt={m.name}
-                    className="gp-pick-avatar"
-                  />
-                ) : (
-                  <div className="gp-pick-avatar gp-pick-avatar--empty" />
-                )}
-                <span>{m.name}</span>
-                <span className="gp-pick-x">✕</span>
-              </button>
+                <button
+                  className="gp-pick-chip gp-pick-chip--a"
+                  onClick={() => unassignPlayer(m)}
+                  title="Remove from Side A"
+                >
+                  {m.image_url ? (
+                    <img
+                      src={resolveImageUrl(m.image_url) ?? ""}
+                      alt={m.name}
+                      className="gp-pick-avatar"
+                    />
+                  ) : (
+                    <div className="gp-pick-avatar gp-pick-avatar--empty" />
+                  )}
+                  <span>{m.name}</span>
+                  <span className="gp-pick-x">✕</span>
+                </button>
+              </motion.div>
             ))}
+            </AnimatePresence>
             {sideA.length === 0 && (
               <p className="gp-pick-empty">Tap a player below to add</p>
             )}
@@ -541,26 +551,36 @@ function GamePage() {
         <div className="gp-pick-side gp-pick-side--b">
           <h3 className="gp-pick-side-title gp-pick-side-title--b">Side B</h3>
           <div className="gp-pick-list">
+            <AnimatePresence initial={false}>
             {sideB.map((m) => (
-              <button
+              <motion.div
                 key={m.user_id}
-                className="gp-pick-chip gp-pick-chip--b"
-                onClick={() => unassignPlayer(m)}
-                title="Remove from Side B"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.25, ease: "easeInOut" }}
+                style={{ overflow: "hidden" }}
               >
-                {m.image_url ? (
-                  <img
-                    src={resolveImageUrl(m.image_url) ?? ""}
-                    alt={m.name}
-                    className="gp-pick-avatar"
-                  />
-                ) : (
-                  <div className="gp-pick-avatar gp-pick-avatar--empty" />
-                )}
-                <span>{m.name}</span>
-                <span className="gp-pick-x">✕</span>
-              </button>
+                <button
+                  className="gp-pick-chip gp-pick-chip--b"
+                  onClick={() => unassignPlayer(m)}
+                  title="Remove from Side B"
+                >
+                  {m.image_url ? (
+                    <img
+                      src={resolveImageUrl(m.image_url) ?? ""}
+                      alt={m.name}
+                      className="gp-pick-avatar"
+                    />
+                  ) : (
+                    <div className="gp-pick-avatar gp-pick-avatar--empty" />
+                  )}
+                  <span>{m.name}</span>
+                  <span className="gp-pick-x">✕</span>
+                </button>
+              </motion.div>
             ))}
+            </AnimatePresence>
             {sideB.length === 0 && (
               <p className="gp-pick-empty">Tap a player below to add</p>
             )}
@@ -568,13 +588,30 @@ function GamePage() {
         </div>
       </div>
 
+      <button
+        className="gp-btn gp-btn--primary"
+        onClick={onAction}
+        disabled={sideA.length === 0 || sideB.length === 0 || saving}
+      >
+        {saving ? "Creating…" : actionLabel}
+      </button>
+
       {/* Unassigned players */}
       {unassigned.length > 0 && (
         <div className="gp-unassigned">
           <h4 className="gp-unassigned-title">Available Players</h4>
           <div className="gp-unassigned-list">
+            <AnimatePresence initial={false}>
             {unassigned.map((m) => (
-              <div key={m.user_id} className="gp-unassigned-player">
+              <motion.div
+                key={m.user_id}
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.25, ease: "easeInOut" }}
+                style={{ overflow: "hidden" }}
+              >
+                <div className="gp-unassigned-player">
                 {m.image_url ? (
                   <img
                     src={resolveImageUrl(m.image_url) ?? ""}
@@ -597,19 +634,13 @@ function GamePage() {
                 >
                   → B
                 </button>
-              </div>
+                </div>
+              </motion.div>
             ))}
+            </AnimatePresence>
           </div>
         </div>
       )}
-
-      <button
-        className="gp-btn gp-btn--primary"
-        onClick={onAction}
-        disabled={sideA.length === 0 || sideB.length === 0 || saving}
-      >
-        {saving ? "Creating…" : actionLabel}
-      </button>
 
       <Link to={`/group/${groupId}`} className="gp-btn">
         ← Back to Group

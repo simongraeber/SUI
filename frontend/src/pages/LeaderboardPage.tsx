@@ -113,21 +113,6 @@ function PlayerCell({ player, groupId }: { player: PlayerStats; groupId: string 
     >
       <UserAvatar name={player.name} imageUrl={player.image_url} className="h-7 w-7" fallbackClassName="text-[10px]" />
       <span className="truncate max-w-[120px] underline-offset-2 hover:underline">{player.name}</span>
-      {player.provisional && (
-        <HoverCard>
-          <HoverCardTrigger asChild>
-            <span
-              className="shrink-0 inline-flex items-center justify-center size-4 text-[9px] leading-none font-bold bg-muted text-muted-foreground rounded-full cursor-help"
-              aria-label="Provisional rating"
-            >
-              P
-            </span>
-          </HoverCardTrigger>
-          <HoverCardContent className="w-48 text-xs">
-            Provisional — rating will stabilize after 10 games
-          </HoverCardContent>
-        </HoverCard>
-      )}
     </div>
   );
 }
@@ -138,7 +123,7 @@ function LeaderboardPage() {
   const navigate = useNavigate();
   const [stats, setStats] = useState<GroupStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState<PeriodKey>("all");
+  const [period, setPeriod] = useState<PeriodKey>("last_90");
 
   const fetchStats = useCallback(
     (p: PeriodKey) => {
@@ -166,11 +151,32 @@ function LeaderboardPage() {
           id: "rank",
           header: "#",
           enableSorting: false,
-          cell: ({ row }) => {
-            const idx = row.index;
+          cell: ({ row, table }) => {
+            const player = row.original;
+            if (player.provisional) {
+              return (
+                <HoverCard>
+                  <HoverCardTrigger asChild>
+                    <span
+                      className="shrink-0 inline-flex items-center justify-center size-4 text-[9px] leading-none font-bold bg-muted text-muted-foreground rounded-full cursor-help"
+                      aria-label="Provisional rating"
+                    >
+                      P
+                    </span>
+                  </HoverCardTrigger>
+                  <HoverCardContent className="w-48 text-xs">
+                    Provisional — rating will stabilize after 10 games
+                  </HoverCardContent>
+                </HoverCard>
+              );
+            }
+            // Count only non-provisional players above this row
+            const rank = table.getRowModel().rows
+              .slice(0, row.index)
+              .filter(r => !r.original.provisional).length + 1;
             return (
               <span className="font-medium">
-                {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : idx + 1}
+                {rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : rank}
               </span>
             );
           },
