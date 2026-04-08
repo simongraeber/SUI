@@ -11,3 +11,7 @@ export function eloColor(elo: number): string {
   if (elo < 900) return "text-red-500";
   return "";
 }
+
+export function formatElo(elo: number): number {
+  return Math.round(elo);
+}

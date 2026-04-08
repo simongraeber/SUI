@@ -45,8 +45,8 @@ class PlayerStatsResponse(BaseModel):
     user_id: UUID
     name: str
     image_url: str | None = None
-    elo: int = 1000
-    elo_delta: int = 0
+    elo: float = 1000.0
+    elo_delta: float = 0.0
     provisional: bool = True
     games_played: int = 0
     wins: int = 0

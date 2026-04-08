@@ -1,7 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import { Sparkles } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { popIn } from "@/lib/animations";
+import { useAuth } from "@/lib/AuthContext";
 import "./GamePage.css";
 import {
   getGroup,
@@ -11,6 +13,7 @@ import {
   getGame,
   recordGoal,
   deleteGoal,
+  getGroupStats,
   resolveImageUrl,
   type GroupDetail,
   type GroupMember as GroupMemberType,
@@ -76,6 +79,7 @@ const scoreBump = {
 /* ── component ── */
 function GamePage() {
   const { groupId } = useParams<{ groupId: string }>();
+  const { refreshUser } = useAuth();
 
   // group data
   const [, setGroup] = useState<GroupDetail | null>(null);
@@ -105,6 +109,9 @@ function GamePage() {
   const [saving, setSaving] = useState(false);
   const [, setRemoteGoalCount] = useState(0);
 
+  // ELO data for auto-balancing
+  const [eloMap, setEloMap] = useState<Map<string, number>>(new Map());
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const syncRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const phaseRef = useRef(phase);
@@ -114,6 +121,22 @@ function GamePage() {
   const serverElapsedRef = useRef(0);
   const serverFetchedAtRef = useRef(0);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  const refreshedCompletedGameIdRef = useRef<string | null>(null);
+
+  const refreshRatings = useCallback(async () => {
+    if (!groupId) return;
+
+    try {
+      const stats = await getGroupStats(groupId);
+      const map = new Map<string, number>();
+      for (const p of stats.players) map.set(p.user_id, p.elo);
+      setEloMap(map);
+    } catch {
+      // ignore rating refresh failures
+    }
+
+    await refreshUser();
+  }, [groupId, refreshUser]);
 
   /* ── screen wake lock: keep screen on during active game ── */
   useEffect(() => {
@@ -156,6 +179,14 @@ function GamePage() {
         // Always load group data first
         const groupData = await getGroup(groupId);
         setGroup(groupData);
+
+        // Fetch ELO ratings for balancing
+        try {
+          const stats = await getGroupStats(groupId);
+          const map = new Map<string, number>();
+          for (const p of stats.players) map.set(p.user_id, p.elo);
+          setEloMap(map);
+        } catch { /* stats unavailable — balancing will use default */ }
 
         // Try to find an active game (may fail if backend hasn't been updated)
         let activeGame: GameResponse | null = null;
@@ -276,6 +307,14 @@ function GamePage() {
     };
   }, [groupId, gameId, phase]);
 
+  useEffect(() => {
+    if (phase !== "completed" || !gameId) return;
+    if (refreshedCompletedGameIdRef.current === gameId) return;
+
+    refreshedCompletedGameIdRef.current = gameId;
+    void refreshRatings();
+  }, [gameId, phase, refreshRatings]);
+
   /* ── setup: assign player to side ── */
   const assignPlayer = useCallback((member: GroupMemberType, side: Side) => {
     setUnassigned((prev) => prev.filter((m) => m.user_id !== member.user_id));
@@ -293,6 +332,54 @@ function GamePage() {
     setSideB((prev) => prev.filter((m) => m.user_id !== member.user_id));
     setUnassigned((prev) => [...prev, member]);
   }, []);
+
+  /* ── auto-balance: distribute assigned players for fairest teams ── */
+  const autoBalance = useCallback(() => {
+    const pool = [...sideA, ...sideB];
+    if (pool.length < 2) return;
+
+    const DEFAULT_ELO = 1000;
+    // Sort by ELO descending (best players first)
+    pool.sort((a, b) => (eloMap.get(b.user_id) ?? DEFAULT_ELO) - (eloMap.get(a.user_id) ?? DEFAULT_ELO));
+
+    // Greedy partition: assign each player to the team with lower total ELO
+    const newA: GroupMemberType[] = [];
+    const newB: GroupMemberType[] = [];
+    let sumA = 0;
+    let sumB = 0;
+
+    for (const player of pool) {
+      const elo = eloMap.get(player.user_id) ?? DEFAULT_ELO;
+      if (sumA <= sumB) {
+        newA.push(player);
+        sumA += elo;
+      } else {
+        newB.push(player);
+        sumB += elo;
+      }
+    }
+
+    setSideA(newA);
+    setSideB(newB);
+  }, [sideA, sideB, eloMap]);
+
+  /* ── balance indicator (0-100%) ── */
+  const balanceInfo = (() => {
+    const DEFAULT_ELO = 1000;
+    if (sideA.length === 0 || sideB.length === 0) return null;
+
+    const avgA = sideA.reduce((s, m) => s + (eloMap.get(m.user_id) ?? DEFAULT_ELO), 0) / sideA.length;
+    const avgB = sideB.reduce((s, m) => s + (eloMap.get(m.user_id) ?? DEFAULT_ELO), 0) / sideB.length;
+    const maxAvg = Math.max(avgA, avgB, 1);
+    const diff = Math.abs(avgA - avgB);
+    const pct = Math.round(Math.max(0, (1 - diff / maxAvg) * 100));
+
+    // Continuous gradient: 75 = red (hue 0°), 100 = green (hue 120°)
+    const hue = Math.round(Math.min(Math.max((pct - 75) / 25, 0), 1) * 120);
+    const color = `hsl(${hue}, 75%, 58%)`;
+
+    return { pct, color, diff: Math.round(diff), avgA: Math.round(avgA), avgB: Math.round(avgB) };
+  })();
 
   /* ── start game (create on server) ── */
   const startGame = useCallback(async () => {
@@ -588,13 +675,29 @@ function GamePage() {
         </div>
       </div>
 
-      <button
-        className="gp-btn gp-btn--primary"
-        onClick={onAction}
-        disabled={sideA.length === 0 || sideB.length === 0 || saving}
-      >
-        {saving ? "Creating…" : actionLabel}
-      </button>
+      {/* Action row: Auto Balance + Start/Play Again */}
+      <div className="gp-action-row">
+        <button
+          className="gp-btn gp-btn--balance"
+          onClick={autoBalance}
+          disabled={sideA.length + sideB.length < 2}
+          title="Auto-balance teams by skill rating"
+        >
+          <Sparkles className="gp-sparkle-icon" />
+          Auto Balance
+          {balanceInfo && (
+            <span className="gp-balance-dot" style={{ background: balanceInfo.color }} />
+          )}
+        </button>
+
+        <button
+          className="gp-btn gp-btn--primary"
+          onClick={onAction}
+          disabled={sideA.length === 0 || sideB.length === 0 || saving}
+        >
+          {saving ? "Creating…" : actionLabel}
+        </button>
+      </div>
 
       {/* Unassigned players */}
       {unassigned.length > 0 && (

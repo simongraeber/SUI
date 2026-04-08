@@ -1,3 +1,16 @@
+/* ── Home Page ── */
+.home-page {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+@supports not (overflow: clip) {
+  .home-page {
+    overflow-x: hidden;
+  }
+}
+
 /* ── Hero ── */
 .hero {
   display: flex;

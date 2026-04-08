@@ -197,11 +197,11 @@ async def compute_group_stats(
             streak = {"type": first, "count": count}
 
         elo_data = elo_map.get(uid)
-        player_elo = round(elo_data[0]) if elo_data else 1000
+        player_elo = elo_data[0] if elo_data else 1000.0
         provisional = elo_data[2] if elo_data else True
 
         if is_period:
-            elo_delta = round(elo_delta_map.get(uid, 0.0))
+            elo_delta = elo_delta_map.get(uid, 0.0)
         else:
             elo_delta = player_elo - 1000
 

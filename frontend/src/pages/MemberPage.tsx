@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { fadeUp, revealY } from "@/lib/animations";
 import { FormDots } from "@/components/FormDots";
-import { eloColor } from "@/lib/utils";
+import { eloColor, formatElo } from "@/lib/utils";
 import { useAuth } from "@/lib/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import LinkButton from "@/components/LinkButton";
@@ -209,7 +209,7 @@ function MemberPage() {
           <div className="flex items-center justify-center gap-2">
             <TrendingUp className={`size-5 ${eloColor(player.elo)}`} />
             <p className={`text-3xl font-bold text-center ${eloColor(player.elo)}`}>
-              {player.elo}{" "}
+              {formatElo(player.elo)}{" "}
               <span className="text-base font-normal text-muted-foreground">Elo</span>
             </p>
           </div>
@@ -285,6 +285,9 @@ function MemberPage() {
                   (g) => g.scored_by === userId && !g.friendly_fire,
                 ).length;
 
+                const playerScore = playerSide === "a" ? game.score_a : game.score_b;
+                const opponentScore = playerSide === "a" ? game.score_b : game.score_a;
+
                 const date = new Date(game.created_at).toLocaleDateString(undefined, {
                   month: "short",
                   day: "numeric",
@@ -302,7 +305,7 @@ function MemberPage() {
                     </span>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium">
-                        {game.score_a} – {game.score_b}
+                        {playerScore} – {opponentScore}
                         {playerGoals > 0 && (
                           <span className="text-muted-foreground font-normal ml-1.5">
                             ({playerGoals} goal{playerGoals !== 1 ? "s" : ""})

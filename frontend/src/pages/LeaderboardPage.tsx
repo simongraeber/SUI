@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useCallback, useTransition } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { FormDots } from "@/components/FormDots";
-import { eloColor } from "@/lib/utils";
+import { eloColor, formatElo } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { type ColumnDef } from "@tanstack/react-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -208,7 +208,7 @@ function LeaderboardPage() {
               <span
                 className={`block text-center font-bold ${eloColor(p.elo)}`}
               >
-                {p.elo}
+                {formatElo(p.elo)}
               </span>
             );
           },
@@ -241,7 +241,7 @@ function LeaderboardPage() {
             return (
               <span className={`block text-center font-medium ${color}`}>
                 {v > 0 ? "+" : ""}
-                {v}
+                {formatElo(v)}
               </span>
             );
           },
@@ -486,7 +486,7 @@ function LeaderboardPage() {
                       {stats!.summary.highest_rated.name}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {stats!.summary.highest_rated.elo} Elo
+                      {formatElo(stats!.summary.highest_rated.elo)} Elo
                     </p>
                   </>
                 ) : (

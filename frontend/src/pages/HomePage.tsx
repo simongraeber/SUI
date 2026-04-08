@@ -18,7 +18,7 @@ function HomePage() {
   const { user } = useAuth();
 
   return (
-    <>
+    <div className="home-page">
       {/* Hero */}
       <Hero
         logoSrc="/LogoSIU.svg"
@@ -101,7 +101,7 @@ function HomePage() {
           {user ? "Go to Dashboard" : "Sign In with Google"}
         </LinkButton>
       </section>
-    </>
+    </div>
   );
 }
 

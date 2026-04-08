@@ -775,6 +775,49 @@
 }
 
 /* ── unassigned players ── */
+
+/* ── Auto Balance ── */
+.gp-action-row {
+  display: flex;
+  gap: 0.6rem;
+  width: 100%;
+}
+.gp-action-row .gp-btn {
+  flex: 1;
+}
+
+.gp-btn--balance {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(168, 85, 247, 0.28);
+}
+.gp-btn--balance:hover:not(:disabled) {
+  background: rgba(168, 85, 247, 0.15);
+  border-color: rgba(168, 85, 247, 0.50);
+}
+
+.gp-sparkle-icon {
+  width: 16px;
+  height: 16px;
+  color: #a78bfa;
+  flex-shrink: 0;
+}
+
+.gp-balance-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-left: auto;
+  transition: background 0.4s;
+  box-shadow: 0 0 6px currentColor;
+}
+
+.gp-balance-label {
+  color: var(--gp-text-muted);
+  font-weight: 500;
+}
+
+/* ── unassigned players ── */
 .gp-unassigned {
   width: 100%;
   margin-top: 0.25rem;
