@@ -1,3 +1,4 @@
+import base64
 import io
 import logging
 import random
@@ -5,9 +6,9 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+import httpx
+
 from fastapi.responses import FileResponse, StreamingResponse
-from google import genai
-from google.genai import types
 from PIL import Image
 
 from app.api.deps import get_current_user
@@ -19,34 +20,46 @@ logger = logging.getLogger(__name__)
 IMAGES_DIR = Path("/data/images")
 IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
+_ASSETS_DIR = Path(__file__).parent.parent.parent / "assets"
+_STYLE_REFERENCE_PATHS = [_ASSETS_DIR / f"style_reference_{i}.png" for i in range(1, 7)]
+_style_reference_bytes: list[bytes] | None = None
+
+
+def _get_style_reference_bytes() -> list[bytes]:
+    global _style_reference_bytes
+    if _style_reference_bytes is None:
+        refs = []
+        for path in _STYLE_REFERENCE_PATHS:
+            if path.is_file():
+                img = Image.open(path).convert("RGBA")
+                img.thumbnail((768, 768), Image.LANCZOS)
+                buf = io.BytesIO()
+                img.save(buf, format="PNG")
+                refs.append(buf.getvalue())
+            else:
+                logger.warning("Style reference image not found at %s", path)
+        _style_reference_bytes = refs
+    return _style_reference_bytes
+
+
 router = APIRouter(prefix="/images", tags=["images"])
 
 _IMAGE_PROMPT = (
-    "Close-up macro photograph of a real foosball table player figure "
-    ", shot from the shoulders up like an ID card photo. "
-    "The figure is a complete full-body foosball player but the camera is zoomed in on the face. "
-    "Match the person's hair color, hair style, skin tone, eye color, and clothing style. "
-    "Entire figure is rigid, molded, glossy hard plastic with visible paint strokes, chips, and scratches. "
-    "Nose is a small rounded plastic bump. Ears are small molded bumps. "
-    "Hair is a solid molded plastic shape painted to match original color. "
-    "Background is pure solid white. "
-    "Extreme macro photography, high-contrast studio lighting. --ar 1:1"
+    "You have 3 reference images. "
+    "The first two show the style of a solid plastic toy that was produced to represent a person as a table football player. "
+    "The last image is a picture of a real person. "
+    "Create a preview of how such a mini figure, customized for this person, would look like. "
+    "Use the style, posture and image layout of the first images but do not copy any elements. "
+    "Make sure the characteristics (such as face shape, skin tone, mouth, eyebrows, hair length, hair color, hair style, accessories such as glasses, earrings, ...) and clothing of the person in the real image are accurately represented."
+    "- solid {bg_color} background"
 )
 
-
-_gemini_client: genai.Client | None = None
-
-
-def _get_gemini_client() -> genai.Client:
-    global _gemini_client
-    if not settings.gemini_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Gemini API key is not configured",
-        )
-    if _gemini_client is None:
-        _gemini_client = genai.Client(api_key=settings.gemini_api_key)
-    return _gemini_client
+BG_COLORS = [
+    "bright red", "vivid blue", "lime green", "sunny yellow",
+    "hot pink", "orange", "cyan", "purple", "teal", "magenta",
+    "bright green", "bright blue", "bright yellow", "bright magenta",
+    "dark red", "dark blue", "dark green", "dark yellow", "dark magenta",
+]
 
 
 @router.get("/{image_id}")
@@ -67,8 +80,7 @@ async def generate_image(
     image: UploadFile = File(...),
     _user: User = Depends(get_current_user),
 ):
-    """Accept a user-uploaded image and transform it via Gemini image generation."""
-    # Validate uploaded file is an image
+    """Accept a user-uploaded image and transform it into a foosball figure."""
     if image.content_type not in ("image/png", "image/jpeg", "image/webp"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -77,68 +89,90 @@ async def generate_image(
 
     try:
         image_bytes = await image.read()
-        pil_image = Image.open(io.BytesIO(image_bytes))
+        pil_img = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
+        # Center-crop to 1:1
+        w, h = pil_img.size
+        side = min(w, h)
+        left = (w - side) // 2
+        top = (h - side) // 2
+        pil_img = pil_img.crop((left, top, left + side, top + side))
+        buf = io.BytesIO()
+        pil_img.save(buf, format="PNG")
+        user_image_bytes = buf.getvalue()
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Could not read uploaded image",
         )
 
-    client = _get_gemini_client()
+    if not settings.xai_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Image generation is not configured",
+        )
 
-    # Pick a random background colour so players are easy to tell apart
-    BG_COLORS = [
-        "bright red", "vivid blue", "lime green", "sunny yellow",
-        "hot pink", "orange", "cyan", "purple", "teal", "magenta",
-        "bright green", "bright blue", "bright yellow", "bright magenta",
-        "dark red", "dark blue", "dark green", "dark yellow", "dark magenta"
-    ]
-    prompt = _IMAGE_PROMPT.replace(
-        "pure solid white", f"pure solid {random.choice(BG_COLORS)}"
-    )
+    prompt = _IMAGE_PROMPT.format(bg_color=random.choice(BG_COLORS))
+
+    style_refs = _get_style_reference_bytes()
+    selected_refs = random.sample(style_refs, min(2, len(style_refs))) if style_refs else []
+
+    # Build ImageUrl objects: style refs first, user image last
+    images_b64 = [
+        {"url": "data:image/png;base64," + base64.b64encode(ref).decode()}
+        for ref in selected_refs
+    ] + [{"url": "data:image/png;base64," + base64.b64encode(user_image_bytes).decode()}]
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash-image",
-            contents=[
-                prompt,
-                pil_image,
-            ],
-            config=types.GenerateContentConfig(
-                response_modalities=["TEXT", "IMAGE"],
-                image_config=types.ImageConfig(
-                    aspect_ratio="1:1",
-                ),
-            ),
-        )
-    except Exception as exca:
-        logger.exception("Gemini API call failed %s", exca)
+        async with httpx.AsyncClient(timeout=120.0) as http:
+            resp = await http.post(
+                "https://api.x.ai/v1/images/edits",
+                headers={"Authorization": f"Bearer {settings.xai_api_key}"},
+                json={
+                    "model": "grok-imagine-image",
+                    "prompt": prompt,
+                    "n": 1,
+                    "aspect_ratio": "auto",
+                    "resolution": "1k",
+                    "images": images_b64,
+                },
+            )
+        resp.raise_for_status()
+        response_data = resp.json()
+    except Exception as exc:
+        logger.exception("xAI image edit failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Image generation failed. Please try again.",
+            detail="Profile picture generation failed. Please try again.",
         )
 
-    # Extract the generated image from the response
-    for part in response.parts:
-        if part.inline_data is not None and part.inline_data.mime_type.startswith("image/"):
-            pil_img = Image.open(io.BytesIO(part.inline_data.data))
+    try:
+        item = response_data["data"][0]
+        if "b64_json" in item:
+            image_data = base64.b64decode(item["b64_json"])
+        elif "url" in item:
+            async with httpx.AsyncClient(timeout=60.0) as http:
+                img_resp = await http.get(item["url"])
+            img_resp.raise_for_status()
+            image_data = img_resp.content
+        else:
+            raise KeyError("No b64_json or url in response")
+    except Exception:
+        logger.error("Unexpected xAI response: %s", response_data)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Profile picture generation failed. Please try again.",
+        )
+    pil_result = Image.open(io.BytesIO(image_data))
 
-            # Save to persistent storage
-            image_id = str(uuid.uuid4())
-            file_path = IMAGES_DIR / f"{image_id}.png"
-            pil_img.save(str(file_path), format="PNG")
+    image_id = str(uuid.uuid4())
+    file_path = IMAGES_DIR / f"{image_id}.png"
+    pil_result.save(str(file_path), format="PNG")
 
-            # Also stream it back to the client
-            buf = io.BytesIO()
-            pil_img.save(buf, format="PNG")
-            buf.seek(0)
-            return StreamingResponse(
-                buf,
-                media_type="image/png",
-                headers={"X-Image-Id": image_id},
-            )
-
-    raise HTTPException(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail="Gemini returned no image in its response",
+    buf = io.BytesIO()
+    pil_result.save(buf, format="PNG")
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="image/png",
+        headers={"X-Image-Id": image_id},
     )

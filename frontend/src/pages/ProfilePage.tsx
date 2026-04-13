@@ -46,6 +46,7 @@ async function resizeImage(file: File, maxDim = 1024, quality = 0.8): Promise<Fi
 function ProfilePage() {
   const { user, refreshUser, logout } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cancelledRef = useRef(false);
 
   const [preview, setPreview] = useState<string | null>(null);
   const [aiPreview, setAiPreview] = useState<string | null>(null);
@@ -53,6 +54,7 @@ function ProfilePage() {
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   // Aggregated stats across all groups
   const [totalGames, setTotalGames] = useState(0);
@@ -98,27 +100,45 @@ function ProfilePage() {
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Reset so the same file can be re-selected
+    e.target.value = "";
     let finalFile: File;
     try {
       finalFile = await resizeImage(file);
     } catch {
       finalFile = file;
     }
+    cancelledRef.current = false;
     setPreview(URL.createObjectURL(finalFile));
     setAiPreview(null);
+    setAiImageId(null);
     setError(null);
+    setDialogOpen(true);
 
     setGenerating(true);
     try {
       const { blob, imageId } = await generateAIImage(finalFile);
+      if (cancelledRef.current) return;
       const url = URL.createObjectURL(blob);
       setAiPreview(url);
       setAiImageId(imageId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "AI generation failed");
+      if (!cancelledRef.current) {
+        setError(err instanceof Error ? err.message : "AI generation failed");
+      }
     } finally {
       setGenerating(false);
     }
+  };
+
+  const handleCancel = () => {
+    cancelledRef.current = true;
+    setDialogOpen(false);
+    setPreview(null);
+    setAiPreview(null);
+    setAiImageId(null);
+    setGenerating(false);
+    setError(null);
   };
 
   const handleSaveAsProfile = async () => {
@@ -126,10 +146,10 @@ function ProfilePage() {
     setSaving(true);
     setError(null);
     try {
-      // Store the persistent image URL (served by the backend)
       const imageUrl = `/api/v1/images/${aiImageId}`;
       await updateMe({ image_url: imageUrl });
       await refreshUser();
+      setDialogOpen(false);
       setPreview(null);
       setAiPreview(null);
       setAiImageId(null);
@@ -140,7 +160,7 @@ function ProfilePage() {
     }
   };
 
-  const displayImage = aiPreview ?? preview ?? resolveImageUrl(user?.image_url);
+  const displayImage = resolveImageUrl(user?.image_url);
   const joined = user?.created_at
     ? new Date(user.created_at).toLocaleDateString()
     : "—";
@@ -165,6 +185,10 @@ function ProfilePage() {
           <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <Upload className="size-6 text-white" />
           </div>
+          {/* Tiny persistent upload badge */}
+          <div className="absolute bottom-1 right-1 w-7 h-7 bg-primary text-primary-foreground rounded-full flex items-center justify-center shadow group-hover:scale-110 transition-transform z-10 pointer-events-none">
+            <Upload className="size-3.5" />
+          </div>
         </div>
 
         <input
@@ -180,60 +204,70 @@ function ProfilePage() {
         <p className="text-muted-foreground">Joined: {joined}</p>
       </div>
 
-      {/* Generating spinner below avatar */}
-      {generating && (
-        <div className="mb-6 flex flex-col items-center gap-2">
-          <Loader2 className="size-6 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">Generating AI Image…</p>
-        </div>
-      )}
-
       <Dialog
-        open={!!aiPreview}
-        onOpenChange={(open) => {
-          if (!open) {
-            setAiPreview(null);
-            setPreview(null);
-          }
-        }}
+        open={dialogOpen}
+        onOpenChange={(open) => { if (!open) handleCancel(); }}
       >
         <DialogContent className="max-w-sm text-center">
           <DialogHeader className="items-center">
             <DialogTitle>AI Profile Picture</DialogTitle>
             <DialogDescription>
-              Save this as your new profile picture?
+              {generating ? "Creating your AI profile picture…" : "Save this as your new profile picture?"}
             </DialogDescription>
           </DialogHeader>
-          {aiPreview && (
-            <Avatar className="h-40 w-40 mx-auto border-2 border-muted">
-              <AvatarImage src={aiPreview} alt="AI generated" />
-              <AvatarFallback>AI</AvatarFallback>
-            </Avatar>
-          )}
-          <DialogFooter className="flex-row gap-3 sm:justify-center">
-            <Button
-              onClick={handleSaveAsProfile}
-              disabled={saving}
-              className="flex-1 gap-2 bg-gradient-to-br from-[var(--cta-bg-from)] to-[var(--cta-bg-to)] text-white shadow-lg shadow-primary/30 hover:shadow-primary/45"
+
+          {/* Avatar with AI shimmer while generating */}
+          <div className="relative mx-auto w-44 h-44 flex items-center justify-center">
+            <div
+              className="absolute inset-0 ai-shimmer-track ai-shimmer-glow pointer-events-none transition-opacity duration-700"
+              style={{
+                "--shimmer-radius": "50%",
+                opacity: generating ? 0.6 : 0,
+              } as React.CSSProperties}
             >
-              {saving && <Loader2 className="size-4 animate-spin" />}
-              {saving ? "Saving…" : "Save"}
-            </Button>
+              <div className="ai-shimmer ai-shimmer-spin" />
+            </div>
+            <Avatar className="h-40 w-40 border-2 border-muted relative z-10">
+              <AvatarImage src={(aiPreview ?? preview) ?? undefined} alt="Profile preview" />
+              <AvatarFallback className="text-3xl">
+                {user?.name?.charAt(0)?.toUpperCase() ?? "?"}
+              </AvatarFallback>
+            </Avatar>
+          </div>
+
+          {error && <p className="text-sm text-red-500">{error}</p>}
+
+          <DialogFooter className="flex-row gap-3 sm:justify-center">
+            {!generating && aiPreview && (
+              <Button
+                onClick={handleSaveAsProfile}
+                disabled={saving}
+                className="flex-1 gap-2 bg-gradient-to-br from-[var(--cta-bg-from)] to-[var(--cta-bg-to)] text-white shadow-lg shadow-primary/30 hover:shadow-primary/45"
+              >
+                {saving && <Loader2 className="size-4 animate-spin" />}
+                {saving ? "Saving…" : "Save"}
+              </Button>
+            )}
+            {!generating && !aiPreview && error && (
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                Try again
+              </Button>
+            )}
             <Button
               variant="outline"
               className="flex-1"
-              onClick={() => {
-                setAiPreview(null);
-                setPreview(null);
-              }}
+              onClick={handleCancel}
+              disabled={saving}
             >
-              Discard
+              {generating ? "Cancel" : "Discard"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
 
       {/* Stats */}
       {statsLoading ? (

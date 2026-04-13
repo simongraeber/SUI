@@ -9,8 +9,12 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     google_client_secret: str = ""
 
-    # Google Gemini API
+    # Gemini API (ask feature)
     gemini_api_key: str = ""
+
+    # xAI API (image generation)
+    xai_api_key: str = ""
+
     # JWT
     jwt_secret: str
     jwt_algorithm: str = "HS256"
