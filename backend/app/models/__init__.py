@@ -10,3 +10,4 @@ from app.models.user import User  # noqa: E402, F401
 from app.models.group import Group, GroupMember  # noqa: E402, F401
 from app.models.game import Game, GameGoal, GamePlayer  # noqa: E402, F401
 from app.models.elo import PlayerRating, EloHistory  # noqa: E402, F401
+from app.models.tournament import Tournament, TournamentTeam, TournamentTeamPlayer, TournamentMatch  # noqa: E402, F401

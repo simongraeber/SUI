@@ -1,5 +1,4 @@
 import uuid
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -8,81 +7,25 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user, assert_group_membership
 from app.database import get_db
-from app.models.game import Game, GameGoal, GamePlayer
+from app.models.game import Game, GamePlayer
 from app.models.group import GroupMember
 from app.models.user import User
-from app.services.elo import update_elo_for_game
 from app.schemas.game import (
     GameCreate,
     GameGoalCreate,
-    GameGoalResponse,
-    GamePlayerResponse,
     GameResponse,
     GameSummary,
     GameUpdate,
 )
+from app.services.game import (
+    apply_game_update,
+    apply_goal,
+    build_game_response,
+    load_game,
+    remove_goal,
+)
 
 router = APIRouter(prefix="/groups/{group_id}/games", tags=["games"])
-
-SCORE_THRESHOLD = 10
-WIN_MARGIN = 2
-
-
-# ── helpers ──────────────────────────────────────────────────
-async def _get_game_or_404(
-    game_id: uuid.UUID, group_id: uuid.UUID, db: AsyncSession
-) -> Game:
-    result = await db.execute(
-        select(Game)
-        .options(selectinload(Game.players), selectinload(Game.goals))
-        .where(Game.id == game_id, Game.group_id == group_id)
-    )
-    game = result.scalar_one_or_none()
-    if game is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Game not found"
-        )
-    return game
-
-
-def _build_response(game: Game) -> GameResponse:
-    players = [
-        GamePlayerResponse(
-            user_id=gp.user.id,
-            name=gp.user.name,
-            image_url=gp.user.image_url,
-            side=gp.side,
-        )
-        for gp in game.players
-    ]
-    goals = [
-        GameGoalResponse(
-            id=g.id,
-            scored_by=g.scored_by,
-            scorer_name=g.scorer.name if g.scorer else "Unknown",
-            scorer_image_url=g.scorer.image_url if g.scorer else None,
-            side=g.side,
-            friendly_fire=g.friendly_fire,
-            elapsed_at=g.elapsed_at,
-            created_at=g.created_at,
-        )
-        for g in game.goals
-    ]
-    return GameResponse(
-        id=game.id,
-        group_id=game.group_id,
-        state=game.state,
-        score_a=game.score_a,
-        score_b=game.score_b,
-        elapsed=game.computed_elapsed,
-        winner=game.winner,
-        goal_count=game.goal_count,
-        created_by=game.created_by,
-        created_at=game.created_at,
-        updated_at=game.updated_at,
-        players=players,
-        goals=goals,
-    )
 
 
 # ── endpoints ────────────────────────────────────────────────
@@ -132,8 +75,8 @@ async def create_game(
     await db.commit()
 
     # Re-fetch with relationships loaded
-    game = await _get_game_or_404(game.id, group_id, db)
-    return _build_response(game)
+    game = await load_game(game.id, db, group_id=group_id)
+    return build_game_response(game)
 
 
 @router.get("", response_model=list[GameSummary])
@@ -193,7 +136,7 @@ async def list_player_games(
         .limit(20)
     )
     games = result.scalars().all()
-    return [_build_response(g) for g in games]
+    return [build_game_response(g) for g in games]
 
 
 @router.get("/active", response_model=GameResponse | None)
@@ -218,7 +161,7 @@ async def get_active_game(
     game = result.scalar_one_or_none()
     if game is None:
         return None
-    return _build_response(game)
+    return build_game_response(game)
 
 
 @router.get("/{game_id}", response_model=GameResponse)
@@ -230,8 +173,8 @@ async def get_game(
 ):
     """Get full game state (used for live polling)."""
     await assert_group_membership(group_id, user, db)
-    game = await _get_game_or_404(game_id, group_id, db)
-    return _build_response(game)
+    game = await load_game(game_id, db, group_id=group_id)
+    return build_game_response(game)
 
 
 @router.patch("/{game_id}", response_model=GameResponse)
@@ -244,63 +187,11 @@ async def update_game(
 ):
     """Update game state (score, status, elapsed, winner)."""
     await assert_group_membership(group_id, user, db)
-    game = await _get_game_or_404(game_id, group_id, db)
-
-    if game.state in ("completed", "cancelled"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot update a finished game",
-        )
-
-    if body.state is not None:
-        valid_transitions = {
-            "setup": ["active", "cancelled"],
-            "active": ["paused", "completed", "cancelled"],
-            "paused": ["active", "completed", "cancelled"],
-        }
-        allowed = valid_transitions.get(game.state, [])
-        if body.state not in allowed:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot transition from '{game.state}' to '{body.state}'",
-            )
-
-        now = datetime.now(timezone.utc)
-
-        # Accumulate elapsed when leaving active state
-        if game.state == "active" and body.state != "active":
-            if game.started_at is not None:
-                sa = game.started_at
-                if sa.tzinfo is None:
-                    sa = sa.replace(tzinfo=timezone.utc)
-                game.elapsed += int((now - sa).total_seconds())
-            game.started_at = None
-
-        # Set started_at when entering active state
-        if body.state == "active":
-            game.started_at = now
-
-        game.state = body.state
-
-    if body.score_a is not None:
-        game.score_a = body.score_a
-    if body.score_b is not None:
-        game.score_b = body.score_b
-    if body.elapsed is not None:
-        game.elapsed = body.elapsed
-    if body.winner is not None:
-        game.winner = body.winner
-
-    # Trigger Elo update if game just completed
-    if game.state == "completed" and game.winner is not None:
-        await update_elo_for_game(game, db)
-
+    game = await load_game(game_id, db, group_id=group_id)
+    await apply_game_update(game, body, db)
     await db.commit()
-    await db.refresh(game)
-
-    # Re-fetch with relationships
-    game = await _get_game_or_404(game_id, group_id, db)
-    return _build_response(game)
+    game = await load_game(game_id, db, group_id=group_id)
+    return build_game_response(game)
 
 
 @router.post(
@@ -317,64 +208,11 @@ async def record_goal(
 ):
     """Record a goal, update scores, and check for win."""
     await assert_group_membership(group_id, user, db)
-    game = await _get_game_or_404(game_id, group_id, db)
-
-    if game.state != "active":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Goals can only be recorded while the game is active",
-        )
-
-    # Create goal event
-    goal = GameGoal(
-        game_id=game.id,
-        scored_by=body.scored_by,
-        side=body.side,
-        friendly_fire=body.friendly_fire,
-        elapsed_at=body.elapsed_at,
-    )
-    db.add(goal)
-
-    # Update scores
-    if body.side == "a":
-        game.score_a += 1
-    else:
-        game.score_b += 1
-
-    game.goal_count += 1
-
-    # Check for win (first to SCORE_THRESHOLD, win by WIN_MARGIN)
-    if (
-        game.score_a >= SCORE_THRESHOLD
-        and game.score_a - game.score_b >= WIN_MARGIN
-    ):
-        game.winner = "a"
-    elif (
-        game.score_b >= SCORE_THRESHOLD
-        and game.score_b - game.score_a >= WIN_MARGIN
-    ):
-        game.winner = "b"
-
-    # If a winner was determined, finalize elapsed and complete the game
-    if game.winner is not None:
-        now = datetime.now(timezone.utc)
-        if game.started_at is not None:
-            sa = game.started_at
-            if sa.tzinfo is None:
-                sa = sa.replace(tzinfo=timezone.utc)
-            game.elapsed += int((now - sa).total_seconds())
-            game.started_at = None
-        game.state = "completed"
-
-    # Trigger Elo update if game just completed
-    if game.state == "completed" and game.winner is not None:
-        await update_elo_for_game(game, db)
-
+    game = await load_game(game_id, db, group_id=group_id)
+    await apply_goal(game, body, db)
     await db.commit()
-
-    # Re-fetch with relationships
-    game = await _get_game_or_404(game_id, group_id, db)
-    return _build_response(game)
+    game = await load_game(game_id, db, group_id=group_id)
+    return build_game_response(game)
 
 
 @router.delete(
@@ -390,32 +228,8 @@ async def delete_goal(
 ):
     """Undo a goal: remove the GameGoal record and adjust score/goal_count."""
     await assert_group_membership(group_id, user, db)
-    game = await _get_game_or_404(game_id, group_id, db)
-
-    if game.state not in ("active", "paused"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Goals can only be removed while the game is active or paused",
-        )
-
-    # Find the goal
-    goal = next((g for g in game.goals if g.id == goal_id), None)
-    if goal is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found"
-        )
-
-    # Adjust score
-    if goal.side == "a":
-        game.score_a = max(0, game.score_a - 1)
-    else:
-        game.score_b = max(0, game.score_b - 1)
-
-    game.goal_count = max(0, game.goal_count - 1)
-
-    await db.delete(goal)
+    game = await load_game(game_id, db, group_id=group_id)
+    await remove_goal(game, goal_id, db)
     await db.commit()
-
-    # Re-fetch with relationships
-    game = await _get_game_or_404(game_id, group_id, db)
-    return _build_response(game)
+    game = await load_game(game_id, db, group_id=group_id)
+    return build_game_response(game)

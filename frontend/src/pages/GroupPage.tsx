@@ -1,5 +1,5 @@
 import { useEffect, useState, useTransition } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import LinkButton from "@/components/LinkButton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -99,17 +99,23 @@ function GroupPage() {
 
   return (
     <PageTransition className="max-w-3xl mx-auto px-4 py-8 text-center">
-      <motion.h1
-        className="text-3xl font-bold mb-2"
-        variants={fadeUp}
-        initial="hidden"
-        animate="show"
-      >
-        {group.name}
-      </motion.h1>
-      <p className="text-muted-foreground mb-6">
-        {group.member_count} member{group.member_count !== 1 ? "s" : ""}
-      </p>
+      <Link to="/dashboard" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4 w-fit">
+        <ArrowLeft className="size-4" />
+        Dashboard
+      </Link>
+      <div className="text-center mb-6">
+        <motion.h1
+          className="text-3xl font-bold"
+          variants={fadeUp}
+          initial="hidden"
+          animate="show"
+        >
+          {group.name}
+        </motion.h1>
+        <p className="text-muted-foreground text-sm">
+          {group.member_count} member{group.member_count !== 1 ? "s" : ""}
+        </p>
+      </div>
 
       {/* Quick actions */}
       <div className="flex flex-wrap justify-center gap-3 mb-8">
@@ -176,18 +182,14 @@ function GroupPage() {
         </CardContent>
       </Card>
 
-      <div className="flex flex-wrap justify-center gap-3">
-        <LinkButton variant="outline" to="/dashboard">
-          <ArrowLeft className="size-4" />
-          Back to Dashboard
-        </LinkButton>
-        {!isOwner && (
+      {!isOwner && (
+        <div className="flex justify-center">
           <Button variant="destructive" size="sm" onClick={handleLeave}>
             <LogOut className="size-4 mr-1" />
             Leave Group
           </Button>
-        )}
-      </div>
+        </div>
+      )}
     </PageTransition>
   );
 }

@@ -390,6 +390,20 @@
 .gp-side-player-avatar--empty {
   background: rgba(255, 255, 255, 0.12);
 }
+.gp-side-player-avatar-wrap {
+  width: 52px;
+  height: 52px;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+}
+.gp-pick-avatar-wrap {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+.gp-scorer-avatar-wrap {
+  width: 48px;
+  height: 48px;
+}
 
 /* ══════════════════════════════════════════════════════════════
    Goal Attribution Dialog (bottom sheet)

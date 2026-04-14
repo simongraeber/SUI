@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { fadeUp, revealY } from "@/lib/animations";
 import { FormDots } from "@/components/FormDots";
@@ -64,7 +64,10 @@ function MemberPage() {
   if (loading) {
     return (
       <PageTransition className="max-w-lg mx-auto px-4 py-8">
-        {/* Avatar + name + elo skeleton */}
+        <Link to={`/group/${groupId}`} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4">
+          <ArrowLeft className="size-4" />
+          Group
+        </Link>
         <div className="flex flex-col items-center mb-6">
           <Skeleton className="h-28 w-28 rounded-full mb-3" />
           <h1 className="text-lg font-bold">
@@ -113,10 +116,13 @@ function MemberPage() {
     );
   }
 
-  /* Player exists in group but has no games yet */
   if (!player) {
     return (
       <PageTransition className="max-w-lg mx-auto px-4 py-8">
+        <Link to={`/group/${groupId}`} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4">
+          <ArrowLeft className="size-4" />
+          Group
+        </Link>
         <div className="flex flex-col items-center py-8">
           <div
             className={`relative${isOwnProfile ? " cursor-pointer group" : ""}`}
@@ -144,13 +150,6 @@ function MemberPage() {
             </motion.h1>
           <p className="text-sm text-muted-foreground mt-2">No games played yet.</p>
         </div>
-
-        <div className="flex justify-center mt-4">
-          <LinkButton variant="outline" to={`/group/${groupId}`}>
-            <ArrowLeft className="size-4" />
-            Back
-          </LinkButton>
-        </div>
       </PageTransition>
     );
   }
@@ -164,7 +163,10 @@ function MemberPage() {
 
   return (
     <PageTransition className="max-w-lg mx-auto px-4 py-8">
-      {/* ── Header ── */}
+      <Link to={`/group/${groupId}`} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4">
+        <ArrowLeft className="size-4" />
+        Group
+      </Link>
       <div className="flex flex-col items-center mb-6">
         <div
           className={`relative${isOwnProfile ? " cursor-pointer group" : ""}`}
@@ -328,13 +330,6 @@ function MemberPage() {
         </Card>
       )}
 
-      {/* ── Navigation ── */}
-      <div className="flex justify-center">
-        <LinkButton variant="outline" to={`/group/${groupId}`}>
-          <ArrowLeft className="size-4" />
-          Back
-        </LinkButton>
-      </div>
     </PageTransition>
   );
 }

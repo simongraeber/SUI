@@ -13,17 +13,14 @@ class GameCreate(BaseModel):
 
 
 class GameUpdate(BaseModel):
-    """Partial update for game state (score, status, etc.)."""
+    """Partial update for game state."""
     state: Literal["active", "paused", "completed", "cancelled"] | None = None
-    score_a: int | None = None
-    score_b: int | None = None
-    elapsed: int | None = None
-    winner: Literal["a", "b"] | None = None
 
 
 class GameGoalCreate(BaseModel):
     """Record a goal with scorer info."""
-    scored_by: UUID        # user_id of the player who scored
+    scored_by: UUID | None = None  # user_id; None for guest players
+    scorer_name: str | None = None  # required when scored_by is None
     side: Literal["a", "b"]  # which side gets the point
     friendly_fire: bool = False
     elapsed_at: int        # elapsed seconds when goal was scored
@@ -31,7 +28,7 @@ class GameGoalCreate(BaseModel):
 
 # ── Response schemas ──
 class GamePlayerResponse(BaseModel):
-    user_id: UUID
+    user_id: UUID | None = None
     name: str
     image_url: str | None = None
     side: str  # "a" | "b"
@@ -41,7 +38,7 @@ class GamePlayerResponse(BaseModel):
 
 class GameGoalResponse(BaseModel):
     id: UUID
-    scored_by: UUID
+    scored_by: UUID | None = None
     scorer_name: str
     scorer_image_url: str | None = None
     side: str
@@ -54,13 +51,16 @@ class GameGoalResponse(BaseModel):
 
 class GameResponse(BaseModel):
     id: UUID
-    group_id: UUID
+    group_id: UUID | None = None
+    tournament_match_id: UUID | None = None
     state: str
     score_a: int
     score_b: int
     elapsed: int
     winner: str | None = None
     goal_count: int = 0
+    goals_to_win: int = 10
+    win_by: int = 2
     created_by: UUID
     created_at: datetime
     updated_at: datetime

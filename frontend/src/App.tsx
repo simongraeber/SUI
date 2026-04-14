@@ -25,6 +25,7 @@ const JoinGroupPage = lazy(() => import("./pages/JoinGroupPage"));
 const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
 const PlayerPage = lazy(() => import("./pages/MemberPage"));
 const GamePage = lazy(() => import("./pages/GamePage"));
+const TournamentPage = lazy(() => import("./pages/TournamentPage"));
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 const ImprintPage = lazy(() => import("./pages/ImprintPage"));
 const PrivacyPage = lazy(() => import("./pages/PrivacyPage"));
@@ -47,6 +48,9 @@ function App() {
               <Route path="/privacy" element={<PrivacyPage />} />
               <Route path="/terms" element={<TermsPage />} />
 
+              {/* Public tournament page — no auth required */}
+              <Route path="/tournament/:slug" element={<TournamentPage />} />
+
               <Route element={<RequireAuth />}>
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
@@ -58,6 +62,9 @@ function App() {
                 <Route element={<RequireGroupMember />}>
                   <Route path="/game/:groupId" element={<GamePage />} />
                 </Route>
+
+                {/* Tournament match game — auth only, no group membership required */}
+                <Route path="/tournament/:slug/match/:matchId/game" element={<GamePage />} />
               </Route>
 
               <Route path="*" element={<NotFoundPage />} />

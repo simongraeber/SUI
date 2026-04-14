@@ -22,8 +22,12 @@ class Game(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    group_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("groups.id", ondelete="CASCADE"), nullable=False,
+    group_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("groups.id", ondelete="CASCADE"), nullable=True,
+        index=True,
+    )
+    tournament_match_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tournament_matches.id", ondelete="SET NULL"), nullable=True,
         index=True,
     )
     # setup | active | paused | completed | cancelled
@@ -33,6 +37,8 @@ class Game(Base):
     elapsed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)  # accumulated seconds while paused
     winner: Mapped[str | None] = mapped_column(String, nullable=True)  # "a" | "b" | null
     goal_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    goals_to_win: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
+    win_by: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
@@ -74,10 +80,11 @@ class GamePlayer(Base):
         UUID(as_uuid=True), ForeignKey("games.id", ondelete="CASCADE"), nullable=False,
         index=True,
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False,
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True,
         index=True,
     )
+    player_name: Mapped[str | None] = mapped_column(String, nullable=True)
     side: Mapped[str] = mapped_column(String, nullable=False)  # "a" | "b"
 
     # relationships
@@ -95,10 +102,11 @@ class GameGoal(Base):
         UUID(as_uuid=True), ForeignKey("games.id", ondelete="CASCADE"), nullable=False,
         index=True,
     )
-    scored_by: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False,
+    scored_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True,
         index=True,
     )
+    scorer_name: Mapped[str | None] = mapped_column(String, nullable=True)  # for guest players
     side: Mapped[str] = mapped_column(String, nullable=False)  # which side gets the point
     friendly_fire: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     elapsed_at: Mapped[int] = mapped_column(Integer, nullable=False)  # seconds when goal was scored

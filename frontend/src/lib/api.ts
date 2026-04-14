@@ -194,7 +194,7 @@ export async function updateMe(data: { name?: string; image_url?: string | null 
 
 /* ── Games ── */
 export interface GamePlayer {
-  user_id: string;
+  user_id: string | null;
   name: string;
   image_url: string | null;
   side: "a" | "b";
@@ -202,7 +202,7 @@ export interface GamePlayer {
 
 export interface GameGoal {
   id: string;
-  scored_by: string;
+  scored_by: string | null;
   scorer_name: string;
   scorer_image_url: string | null;
   side: "a" | "b";
@@ -213,13 +213,16 @@ export interface GameGoal {
 
 export interface GameResponse {
   id: string;
-  group_id: string;
+  group_id: string | null;
+  tournament_match_id: string | null;
   state: "setup" | "active" | "paused" | "completed" | "cancelled";
   score_a: number;
   score_b: number;
   elapsed: number;
   winner: "a" | "b" | null;
   goal_count: number;
+  goals_to_win: number;
+  win_by: number;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -259,13 +262,7 @@ export async function getGame(groupId: string, gameId: string) {
 export async function updateGame(
   groupId: string,
   gameId: string,
-  data: {
-    state?: string;
-    score_a?: number;
-    score_b?: number;
-    elapsed?: number;
-    winner?: string;
-  },
+  data: { state?: string },
 ) {
   return request<GameResponse>(`/groups/${groupId}/games/${gameId}`, {
     method: "PATCH",
@@ -285,7 +282,8 @@ export async function recordGoal(
   groupId: string,
   gameId: string,
   data: {
-    scored_by: string;
+    scored_by: string | null;
+    scorer_name?: string | null;
     side: string;
     friendly_fire: boolean;
     elapsed_at: number;
@@ -308,7 +306,59 @@ export async function deleteGoal(
   );
 }
 
+/* ── Standalone games (tournament context, no group) ── */
+export async function getGameById(gameId: string) {
+  return request<GameResponse>(`/games/${gameId}`);
+}
+
+export async function updateGameById(
+  gameId: string,
+  data: { state?: string },
+) {
+  return request<GameResponse>(`/games/${gameId}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function recordGoalOnGame(
+  gameId: string,
+  data: {
+    scored_by: string | null;
+    scorer_name?: string | null;
+    side: string;
+    friendly_fire: boolean;
+    elapsed_at: number;
+  },
+) {
+  return request<GameResponse>(`/games/${gameId}/goals`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteGoalOnGame(gameId: string, goalId: string) {
+  return request<GameResponse>(`/games/${gameId}/goals/${goalId}`, { method: "DELETE" });
+}
+
 /* ── AI Image ── */
+export async function uploadProfileImage(file: File): Promise<{ image_url: string }> {
+  const form = new FormData();
+  form.append("image", file);
+
+  const token = localStorage.getItem("token");
+  const res = await fetch(`${API_BASE}/images/upload`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, body.detail ?? res.statusText);
+  }
+  return res.json();
+}
+
 export async function generateAIImage(file: File): Promise<{ blob: Blob; imageId: string }> {
   const form = new FormData();
   form.append("image", file);
@@ -348,5 +398,190 @@ export async function askQuestion(groupId: string, question: string) {
   return request<AskResponse>(`/groups/${groupId}/ask`, {
     method: "POST",
     body: JSON.stringify({ question }),
+  });
+}
+
+/* ── Tournaments ── */
+export interface TournamentTeamPlayer {
+  id: string;
+  team_id: string;
+  name: string;
+  user_id: string | null;
+  user_image_url: string | null;
+}
+
+export interface TournamentTeam {
+  id: string;
+  tournament_id: string;
+  name: string;
+  user_id: string | null;
+  user_name: string | null;
+  user_image_url: string | null;
+  image_url: string | null;
+  seed: number;
+  created_at: string;
+  players: TournamentTeamPlayer[];
+}
+
+export interface TournamentMatch {
+  id: string;
+  tournament_id: string;
+  round: number;
+  position: number;
+  team_a: TournamentTeam | null;
+  team_b: TournamentTeam | null;
+  score_a: number | null;
+  score_b: number | null;
+  winner_id: string | null;
+  status: "pending" | "active" | "completed";
+  is_bye: boolean;
+  game_id: string | null;
+  goals_to_win: number | null;
+  win_by: number | null;
+}
+
+export interface TournamentDetail {
+  id: string;
+  name: string;
+  slug: string;
+  admin_user_id: string;
+  admin_name: string;
+  status: "registration" | "active" | "completed";
+  games_per_match: number;
+  goals_per_game: number;
+  num_rounds: number | null;
+  created_at: string;
+  updated_at: string;
+  teams: TournamentTeam[];
+  matches: TournamentMatch[];
+}
+
+export interface TournamentSummary {
+  id: string;
+  name: string;
+  slug: string;
+  admin_user_id: string;
+  status: "registration" | "active" | "completed";
+  team_count: number;
+  created_at: string;
+}
+
+export async function createTournament(data: {
+  name: string;
+  games_per_match?: number;
+  goals_per_game?: number;
+}) {
+  return request<TournamentDetail>("/tournaments", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function startMatchGame(slug: string, matchId: string): Promise<{ game_id: string }> {
+  return request<{ game_id: string }>(
+    `/tournaments/${slug}/matches/${matchId}/game`,
+    { method: "POST" },
+  );
+}
+
+export async function listMyTournaments() {
+  return request<TournamentSummary[]>("/tournaments");
+}
+
+export async function getTournament(slug: string) {
+  return request<TournamentDetail>(`/tournaments/${slug}`);
+}
+
+export async function registerTeam(slug: string, name: string, userId?: string | null) {
+  return request<TournamentTeam>(`/tournaments/${slug}/teams`, {
+    method: "POST",
+    body: JSON.stringify({ name, user_id: userId ?? null }),
+  });
+}
+
+export async function removeTeam(slug: string, teamId: string) {
+  return request<void>(`/tournaments/${slug}/teams/${teamId}`, { method: "DELETE" });
+}
+
+export async function startTournament(slug: string) {
+  return request<TournamentDetail>(`/tournaments/${slug}/start`, { method: "POST" });
+}
+
+export async function addTeamPlayer(slug: string, teamId: string, name: string, userId?: string | null) {
+  return request<TournamentTeamPlayer>(`/tournaments/${slug}/teams/${teamId}/players`, {
+    method: "POST",
+    body: JSON.stringify({ name, user_id: userId ?? null }),
+  });
+}
+
+export async function removeTeamPlayer(slug: string, teamId: string, playerId: string) {
+  return request<void>(`/tournaments/${slug}/teams/${teamId}/players/${playerId}`, { method: "DELETE" });
+}
+
+export async function updateRoundSettings(slug: string, round: number, data: { goals_to_win?: number; win_by?: number }) {
+  return request<TournamentDetail>(`/tournaments/${slug}/rounds/${round}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function uploadTeamImage(slug: string, teamId: string, file: File): Promise<TournamentTeam> {
+  const token = localStorage.getItem("token");
+  const form = new FormData();
+  form.append("image", file);
+  const res = await fetch(`${API_BASE}/tournaments/${slug}/teams/${teamId}/image`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, body.detail ?? res.statusText);
+  }
+  return res.json();
+}
+
+/** Generate an AI team image from an uploaded file (streaming, same UX as profile pics). */
+export async function generateTeamAIImage(slug: string, teamId: string, file: File): Promise<{ blob: Blob; imageId: string }> {
+  const token = localStorage.getItem("token");
+  const form = new FormData();
+  form.append("image", file);
+  const res = await fetch(`${API_BASE}/tournaments/${slug}/teams/${teamId}/generate-image-upload`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, body.detail ?? res.statusText);
+  }
+  const imageId = res.headers.get("X-Image-Id") ?? "";
+  const blob = await res.blob();
+  return { blob, imageId };
+}
+
+/** Generate an AI team image from player profile pics (streaming). */
+export async function generateTeamImage(slug: string, teamId: string): Promise<{ blob: Blob; imageId: string }> {
+  const token = localStorage.getItem("token");
+  const res = await fetch(`${API_BASE}/tournaments/${slug}/teams/${teamId}/generate-image`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, body.detail ?? res.statusText);
+  }
+  const imageId = res.headers.get("X-Image-Id") ?? "";
+  const blob = await res.blob();
+  return { blob, imageId };
+}
+
+/** Save a previously generated AI image as the team's image. */
+export async function saveTeamImageUrl(slug: string, teamId: string, imageId: string): Promise<TournamentTeam> {
+  return request<TournamentTeam>(`/tournaments/${slug}/teams/${teamId}/image-url?image_id=${encodeURIComponent(imageId)}`, {
+    method: "PATCH",
   });
 }

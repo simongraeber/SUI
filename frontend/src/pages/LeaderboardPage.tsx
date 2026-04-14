@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useCallback, useTransition } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { FormDots } from "@/components/FormDots";
 import { eloColor, formatElo } from "@/lib/utils";
 import { motion } from "framer-motion";
@@ -29,7 +29,6 @@ import {
   Flame,
 } from "lucide-react";
 import PageTransition from "@/components/PageTransition";
-import LinkButton from "@/components/LinkButton";
 import AskAI from "@/components/AskAI";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cardSlideUp, fadeUp, staggerContainer } from "@/lib/animations";
@@ -416,11 +415,13 @@ function LeaderboardPage() {
 
   return (
     <PageTransition className="max-w-4xl mx-auto px-4 py-8">
+      <Link to={`/group/${groupId}`} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4">
+        <ArrowLeft className="size-4" />
+        Group
+      </Link>
       <div className="text-center mb-6">
-        <h1 className="text-3xl font-bold mb-2">Leaderboard</h1>
-        <p className="text-muted-foreground">
-          Elo-based skill rankings
-        </p>
+        <h1 className="text-3xl font-bold">Leaderboard</h1>
+        <p className="text-muted-foreground text-sm">Elo-based skill rankings</p>
       </div>
 
       {/* ── Time span filter ── */}
@@ -655,13 +656,6 @@ function LeaderboardPage() {
 
       {/* ── Ask AI ── */}
       {groupId && <AskAI groupId={groupId} />}
-
-      <div className="flex flex-wrap justify-center gap-3 mt-6">
-        <LinkButton variant="outline" to={`/group/${groupId}`}>
-          <ArrowLeft className="size-4" />
-          Back to Group
-        </LinkButton>
-      </div>
     </PageTransition>
   );
 }

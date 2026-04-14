@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { popIn } from "@/lib/animations";
 import { useAuth } from "@/lib/AuthContext";
+import UserAvatar from "@/components/UserAvatar";
 import "./GamePage.css";
 import {
   getGroup,
@@ -14,11 +15,13 @@ import {
   recordGoal,
   deleteGoal,
   getGroupStats,
-  resolveImageUrl,
-  type GroupDetail,
+  getGameById,
+  updateGameById,
+  recordGoalOnGame,
+  deleteGoalOnGame,
+  startMatchGame,
   type GroupMember as GroupMemberType,
   type GameResponse,
-  type GamePlayer,
 } from "@/lib/api";
 
 import vsBadge from "../assets/LiveGame/vs-badge.webp";
@@ -39,8 +42,9 @@ import gameCancelledImg from "../assets/game-cancelled.webp";
 type PagePhase = "loading" | "setup" | "active" | "paused" | "completed" | "cancelled";
 type Side = "a" | "b";
 
-const SCORE_THRESHOLD = 10;
-const WIN_MARGIN = 2;
+/** Minimal player shape shared by group members and tournament players. */
+type PlayerInfo = { key: string; user_id: string | null; name: string; image_url: string | null };
+
 const SYNC_INTERVAL_MS = 2000;
 
 /* ── helpers ── */
@@ -51,13 +55,17 @@ function formatTime(seconds: number): string {
 }
 
 /** Sort members by last_played_at descending (most recent first), never-played last. */
-function sortByRecency(members: GroupMemberType[]): GroupMemberType[] {
+function sortByRecency(members: GroupMemberType[]): PlayerInfo[] {
   return [...members].sort((a, b) => {
     if (!a.last_played_at && !b.last_played_at) return 0;
     if (!a.last_played_at) return 1;
     if (!b.last_played_at) return -1;
     return new Date(b.last_played_at).getTime() - new Date(a.last_played_at).getTime();
-  });
+  }).map(toPlayerInfo);
+}
+
+function toPlayerInfo(m: GroupMemberType): PlayerInfo {
+  return { key: m.user_id, user_id: m.user_id, name: m.name, image_url: m.image_url };
 }
 
 /* ── animation variants ── */
@@ -78,17 +86,40 @@ const scoreBump = {
 
 /* ── component ── */
 function GamePage() {
-  const { groupId } = useParams<{ groupId: string }>();
+  const { groupId, slug, matchId } = useParams<{ groupId?: string; slug?: string; matchId?: string }>();
   const { refreshUser } = useAuth();
 
-  // group data
-  const [, setGroup] = useState<GroupDetail | null>(null);
+  /** True when rendered from /tournament/:slug/match/:matchId/game */
+  const isTournamentGame = Boolean(matchId && slug);
+
+  /* ── API wrappers: pick group-scoped or standalone endpoint ── */
+  const fetchGame = useCallback(
+    (gId: string) =>
+      isTournamentGame ? getGameById(gId) : getGame(groupId!, gId),
+    [isTournamentGame, groupId],
+  );
+  const patchGame = useCallback(
+    (gId: string, data: { state?: string }) =>
+      isTournamentGame ? updateGameById(gId, data) : updateGame(groupId!, gId, data),
+    [isTournamentGame, groupId],
+  );
+  const postGoal = useCallback(
+    (gId: string, data: Parameters<typeof recordGoalOnGame>[1]) =>
+      isTournamentGame ? recordGoalOnGame(gId, data) : recordGoal(groupId!, gId, data),
+    [isTournamentGame, groupId],
+  );
+  const removeGoal = useCallback(
+    (gId: string, goalId: string) =>
+      isTournamentGame ? deleteGoalOnGame(gId, goalId) : deleteGoal(groupId!, gId, goalId),
+    [isTournamentGame, groupId],
+  );
+
   const [phase, setPhase] = useState<PagePhase>("loading");
 
   // setup: player assignment
-  const [sideA, setSideA] = useState<GroupMemberType[]>([]);
-  const [sideB, setSideB] = useState<GroupMemberType[]>([]);
-  const [unassigned, setUnassigned] = useState<GroupMemberType[]>([]);
+  const [sideA, setSideA] = useState<PlayerInfo[]>([]);
+  const [sideB, setSideB] = useState<PlayerInfo[]>([]);
+  const [unassigned, setUnassigned] = useState<PlayerInfo[]>([]);
 
   // game state (synced with backend)
   const [gameId, setGameId] = useState<string | null>(null);
@@ -97,6 +128,8 @@ function GamePage() {
   const [elapsed, setElapsed] = useState(0);
   const [winner, setWinner] = useState<Side | null>(null);
   const [remotePlayers, setRemotePlayers] = useState<GameResponse["players"]>([]);
+  const [goalsToWin, setGoalsToWin] = useState(10);
+  const [winBy, setWinBy] = useState(2);
 
   // UI state
   const [lastGoalSide, setLastGoalSide] = useState<Side | null>(null);
@@ -107,7 +140,6 @@ function GamePage() {
   const [attrSide, setAttrSide] = useState<Side>("a");
   const [friendlyFire, setFriendlyFire] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [, setRemoteGoalCount] = useState(0);
 
   // ELO data for auto-balancing
   const [eloMap, setEloMap] = useState<Map<string, number>>(new Map());
@@ -137,8 +169,6 @@ function GamePage() {
 
     await refreshUser();
   }, [groupId, refreshUser]);
-
-  /* ── screen wake lock: keep screen on during active game ── */
   useEffect(() => {
     if (phase !== "active") {
       wakeLockRef.current?.release().catch(() => {});
@@ -173,12 +203,41 @@ function GamePage() {
 
   /* ── load group + check for active game ── */
   useEffect(() => {
+    if (isTournamentGame) {
+      // ── tournament context: get-or-create the match game ──
+      if (!slug || !matchId) return;
+      (async () => {
+        try {
+          const { game_id } = await startMatchGame(slug, matchId);
+          const game = await getGameById(game_id);
+          setGameId(game.id);
+          setScoreA(game.score_a);
+          setScoreB(game.score_b);
+          setElapsed(game.elapsed);
+          setWinner(game.winner as Side | null);
+          setRemotePlayers(game.players);
+          setGoalsToWin(game.goals_to_win ?? 10);
+          setWinBy(game.win_by ?? 2);
+          goalCountRef.current = game.goal_count ?? 0;
+          serverElapsedRef.current = game.elapsed;
+          serverFetchedAtRef.current = Date.now();
+          setSideA(game.players.filter((p) => p.side === "a").map((p, i) => ({ key: p.user_id ?? `${p.name}-${i}`, user_id: p.user_id, name: p.name, image_url: p.image_url })));
+          setSideB(game.players.filter((p) => p.side === "b").map((p, i) => ({ key: p.user_id ?? `${p.name}-${i}`, user_id: p.user_id, name: p.name, image_url: p.image_url })));
+          setUnassigned([]);
+          setPhase(game.state as PagePhase);
+        } catch {
+          setPhase("setup");
+        }
+      })();
+      return;
+    }
+
+    // ── group context: original flow ──
     if (!groupId) return;
     (async () => {
       try {
         // Always load group data first
         const groupData = await getGroup(groupId);
-        setGroup(groupData);
 
         // Fetch ELO ratings for balancing
         try {
@@ -204,8 +263,9 @@ function GamePage() {
           setElapsed(activeGame.elapsed);
           setWinner(activeGame.winner as Side | null);
           setRemotePlayers(activeGame.players);
+          setGoalsToWin(activeGame.goals_to_win ?? 10);
+          setWinBy(activeGame.win_by ?? 2);
           goalCountRef.current = activeGame.goal_count ?? 0;
-          setRemoteGoalCount(activeGame.goal_count ?? 0);
           serverElapsedRef.current = activeGame.elapsed;
           serverFetchedAtRef.current = Date.now();
 
@@ -213,11 +273,13 @@ function GamePage() {
           const sA = activeGame.players
             .filter((p) => p.side === "a")
             .map((p) => groupData.members.find((m) => m.user_id === p.user_id))
-            .filter(Boolean) as GroupMemberType[];
+            .filter(Boolean)
+            .map((m) => toPlayerInfo(m as GroupMemberType));
           const sB = activeGame.players
             .filter((p) => p.side === "b")
             .map((p) => groupData.members.find((m) => m.user_id === p.user_id))
-            .filter(Boolean) as GroupMemberType[];
+            .filter(Boolean)
+            .map((m) => toPlayerInfo(m as GroupMemberType));
           setSideA(sA);
           setSideB(sB);
           setUnassigned(sortByRecency(groupData.members.filter((m) => !assignedIds.has(m.user_id))));
@@ -231,7 +293,7 @@ function GamePage() {
         setPhase("setup");
       }
     })();
-  }, [groupId]);
+  }, [groupId, isTournamentGame, slug, matchId]);
 
   /* ── timer (display only — derives from server elapsed + local delta) ── */
   useEffect(() => {
@@ -252,12 +314,13 @@ function GamePage() {
 
   /* ── live sync polling ── */
   useEffect(() => {
-    if (!groupId || !gameId) return;
+    if (!gameId) return;
+    if (!groupId && !isTournamentGame) return;
     if (phase !== "active" && phase !== "paused" && phase !== "setup") return;
 
     syncRef.current = setInterval(async () => {
       try {
-        const g = await getGame(groupId, gameId);
+        const g = await fetchGame(gameId);
         if (
           phaseRef.current === "active" ||
           phaseRef.current === "paused" ||
@@ -284,7 +347,6 @@ function GamePage() {
             }
           }
           goalCountRef.current = g.goal_count;
-          setRemoteGoalCount(g.goal_count);
 
           if (g.state !== phaseRef.current) {
             if (g.state === "completed") {
@@ -305,7 +367,7 @@ function GamePage() {
     return () => {
       if (syncRef.current) clearInterval(syncRef.current);
     };
-  }, [groupId, gameId, phase]);
+  }, [fetchGame, gameId, phase]);
 
   useEffect(() => {
     if (phase !== "completed" || !gameId) return;
@@ -316,10 +378,10 @@ function GamePage() {
   }, [gameId, phase, refreshRatings]);
 
   /* ── setup: assign player to side ── */
-  const assignPlayer = useCallback((member: GroupMemberType, side: Side) => {
-    setUnassigned((prev) => prev.filter((m) => m.user_id !== member.user_id));
-    setSideA((prev) => prev.filter((m) => m.user_id !== member.user_id));
-    setSideB((prev) => prev.filter((m) => m.user_id !== member.user_id));
+  const assignPlayer = useCallback((member: PlayerInfo, side: Side) => {
+    setUnassigned((prev) => prev.filter((m) => m.key !== member.key));
+    setSideA((prev) => prev.filter((m) => m.key !== member.key));
+    setSideB((prev) => prev.filter((m) => m.key !== member.key));
     if (side === "a") {
       setSideA((prev) => [...prev, member]);
     } else {
@@ -327,9 +389,9 @@ function GamePage() {
     }
   }, []);
 
-  const unassignPlayer = useCallback((member: GroupMemberType) => {
-    setSideA((prev) => prev.filter((m) => m.user_id !== member.user_id));
-    setSideB((prev) => prev.filter((m) => m.user_id !== member.user_id));
+  const unassignPlayer = useCallback((member: PlayerInfo) => {
+    setSideA((prev) => prev.filter((m) => m.key !== member.key));
+    setSideB((prev) => prev.filter((m) => m.key !== member.key));
     setUnassigned((prev) => [...prev, member]);
   }, []);
 
@@ -339,23 +401,23 @@ function GamePage() {
     if (pool.length < 2) return;
 
     const DEFAULT_ELO = 1000;
+    const elo = (p: PlayerInfo) => (p.user_id ? eloMap.get(p.user_id) : undefined) ?? DEFAULT_ELO;
     // Sort by ELO descending (best players first)
-    pool.sort((a, b) => (eloMap.get(b.user_id) ?? DEFAULT_ELO) - (eloMap.get(a.user_id) ?? DEFAULT_ELO));
+    pool.sort((a, b) => elo(b) - elo(a));
 
     // Greedy partition: assign each player to the team with lower total ELO
-    const newA: GroupMemberType[] = [];
-    const newB: GroupMemberType[] = [];
+    const newA: PlayerInfo[] = [];
+    const newB: PlayerInfo[] = [];
     let sumA = 0;
     let sumB = 0;
 
     for (const player of pool) {
-      const elo = eloMap.get(player.user_id) ?? DEFAULT_ELO;
       if (sumA <= sumB) {
         newA.push(player);
-        sumA += elo;
+        sumA += elo(player);
       } else {
         newB.push(player);
-        sumB += elo;
+        sumB += elo(player);
       }
     }
 
@@ -368,8 +430,9 @@ function GamePage() {
     const DEFAULT_ELO = 1000;
     if (sideA.length === 0 || sideB.length === 0) return null;
 
-    const avgA = sideA.reduce((s, m) => s + (eloMap.get(m.user_id) ?? DEFAULT_ELO), 0) / sideA.length;
-    const avgB = sideB.reduce((s, m) => s + (eloMap.get(m.user_id) ?? DEFAULT_ELO), 0) / sideB.length;
+    const elo = (p: PlayerInfo) => (p.user_id ? eloMap.get(p.user_id) : undefined) ?? DEFAULT_ELO;
+    const avgA = sideA.reduce((s, m) => s + elo(m), 0) / sideA.length;
+    const avgB = sideB.reduce((s, m) => s + elo(m), 0) / sideB.length;
     const maxAvg = Math.max(avgA, avgB, 1);
     const diff = Math.abs(avgA - avgB);
     const pct = Math.round(Math.max(0, (1 - diff / maxAvg) * 100));
@@ -381,15 +444,15 @@ function GamePage() {
     return { pct, color, diff: Math.round(diff), avgA: Math.round(avgA), avgB: Math.round(avgB) };
   })();
 
-  /* ── start game (create on server) ── */
+  /* ── start game (create on server) — group context only ── */
   const startGame = useCallback(async () => {
     if (!groupId || sideA.length === 0 || sideB.length === 0) return;
     setSaving(true);
     try {
       const game = await createGame(
         groupId,
-        sideA.map((m) => m.user_id),
-        sideB.map((m) => m.user_id),
+        sideA.map((m) => m.user_id).filter(Boolean) as string[],
+        sideB.map((m) => m.user_id).filter(Boolean) as string[],
       );
       setGameId(game.id);
       setScoreA(0);
@@ -401,7 +464,6 @@ function GamePage() {
       setLastGoalScorer(null);
       setRemotePlayers(game.players);
       goalCountRef.current = 0;
-      setRemoteGoalCount(0);
 
       await updateGame(groupId, game.id, { state: "active" });
       serverElapsedRef.current = 0;
@@ -414,32 +476,44 @@ function GamePage() {
     }
   }, [groupId, sideA, sideB]);
 
+  /* ── start tournament game (activate pre-created game) ── */
+  const startTournamentGame = useCallback(async () => {
+    if (!gameId) return;
+    setSaving(true);
+    try {
+      await patchGame(gameId, { state: "active" });
+      serverElapsedRef.current = 0;
+      serverFetchedAtRef.current = Date.now();
+      setPhase("active");
+    } catch (e) {
+      console.error("Failed to start tournament game:", e);
+    } finally {
+      setSaving(false);
+    }
+  }, [patchGame, gameId]);
+
   /* ── toggle pause ── */
   const togglePause = useCallback(async () => {
-    if (!groupId || !gameId) return;
+    if (!gameId) return;
     const newState = phase === "active" ? "paused" : "active";
     try {
-      await updateGame(groupId, gameId, {
-        state: newState,
-      });
+      await patchGame(gameId, { state: newState });
       setPhase(newState);
     } catch (e) {
       console.error("Failed to toggle pause:", e);
     }
-  }, [groupId, gameId, phase]);
+  }, [patchGame, gameId, phase]);
 
   /* ── cancel game ── */
   const cancelGame = useCallback(async () => {
-    if (!groupId || !gameId) return;
+    if (!gameId) return;
     try {
-      await updateGame(groupId, gameId, {
-        state: "cancelled",
-      });
+      await patchGame(gameId, { state: "cancelled" });
       setPhase("cancelled");
     } catch (e) {
       console.error("Failed to cancel game:", e);
     }
-  }, [groupId, gameId]);
+  }, [patchGame, gameId]);
 
   /* ── open goal attribution dialog ── */
   const openGoalDialog = useCallback(
@@ -453,18 +527,18 @@ function GamePage() {
   );
 
   /* ── confirm goal (called directly when player is tapped) ── */
-  const confirmGoal = useCallback(async (scorerId: string) => {
-    if (!groupId || !gameId) return;
+  const confirmGoal = useCallback(async (scorerId: string | null, scorerNameFallback: string) => {
+    if (!gameId) return;
 
     const scoringSide = friendlyFire ? (attrSide === "a" ? "b" : "a") : attrSide;
 
     const newA = scoringSide === "a" ? scoreA + 1 : scoreA;
     const newB = scoringSide === "b" ? scoreB + 1 : scoreB;
 
-    // Find scorer name for splash
+    // Resolve scorer display name for splash
     const allPlayers = remotePlayers.length > 0 ? remotePlayers : [...sideA, ...sideB];
-    const scorerPlayer = allPlayers.find((p) => p.user_id === scorerId);
-    const scorerName = scorerPlayer ? ("name" in scorerPlayer ? scorerPlayer.name : "") : "";
+    const scorerPlayer = scorerId ? allPlayers.find((p) => p.user_id === scorerId) : null;
+    const scorerName = scorerPlayer ? scorerPlayer.name : scorerNameFallback;
 
     setScoreA(newA);
     setScoreB(newB);
@@ -476,19 +550,19 @@ function GamePage() {
 
     // Update local goal count so we don't re-trigger splash on sync
     goalCountRef.current += 1;
-    setRemoteGoalCount(goalCountRef.current);
 
     try {
-      const g = await recordGoal(groupId, gameId, {
+      const goalData = {
         scored_by: scorerId,
+        scorer_name: scorerName,
         side: scoringSide,
         friendly_fire: friendlyFire,
         elapsed_at: elapsed,
-      });
+      };
+      const g = await postGoal(gameId, goalData);
 
       // Sync state from response
       goalCountRef.current = g.goal_count;
-      setRemoteGoalCount(g.goal_count);
       setScoreA(g.score_a);
       setScoreB(g.score_b);
 
@@ -499,15 +573,15 @@ function GamePage() {
     } catch (e) {
       console.error("Failed to save goal:", e);
     }
-  }, [groupId, gameId, attrSide, friendlyFire, scoreA, scoreB, remotePlayers, sideA, sideB]);
+  }, [postGoal, gameId, attrSide, friendlyFire, scoreA, scoreB, remotePlayers, sideA, sideB]);
 
   /* ── undo goal ── */
   const undoGoal = useCallback(
     async (side: Side) => {
-      if (phase !== "active" || !groupId || !gameId) return;
+      if (phase !== "active" || !gameId) return;
 
       // Find the last goal on the given side to delete
-      const lastGame = await getGame(groupId, gameId);
+      const lastGame = await fetchGame(gameId);
       const sideGoals = lastGame.goals.filter((g) => g.side === side);
       const lastGoal = sideGoals[sideGoals.length - 1];
       if (!lastGoal) return;
@@ -519,16 +593,15 @@ function GamePage() {
       setScoreB(newB);
 
       try {
-        const g = await deleteGoal(groupId, gameId, lastGoal.id);
+        const g = await removeGoal(gameId, lastGoal.id);
         goalCountRef.current = g.goal_count;
-        setRemoteGoalCount(g.goal_count);
         setScoreA(g.score_a);
         setScoreB(g.score_b);
       } catch (e) {
         console.error("Failed to undo goal:", e);
       }
     },
-    [phase, groupId, gameId, scoreA, scoreB],
+    [phase, fetchGame, removeGoal, gameId, scoreA, scoreB],
   );
 
   /* ── play again → back to setup ── */
@@ -543,13 +616,12 @@ function GamePage() {
     setLastGoalScorer(null);
     setRemotePlayers([]);
     goalCountRef.current = 0;
-    setRemoteGoalCount(0);
     setPhase("setup");
   }, []);
 
-  /* ── auto-detect new active game (works across devices) ── */
+  /* ── auto-detect new active game (works across devices) — group context only ── */
   useEffect(() => {
-    if (!groupId) return;
+    if (isTournamentGame || !groupId) return;
     if (phase !== "setup" && phase !== "completed" && phase !== "cancelled") return;
 
     const poll = setInterval(async () => {
@@ -563,8 +635,9 @@ function GamePage() {
           setElapsed(active.elapsed);
           setWinner(active.winner as Side | null);
           setRemotePlayers(active.players);
+          setGoalsToWin(active.goals_to_win ?? 10);
+          setWinBy(active.win_by ?? 2);
           goalCountRef.current = active.goal_count ?? 0;
-          setRemoteGoalCount(active.goal_count ?? 0);
           serverElapsedRef.current = active.elapsed;
           serverFetchedAtRef.current = Date.now();
           setPhase(active.state as PagePhase);
@@ -575,7 +648,7 @@ function GamePage() {
     }, SYNC_INTERVAL_MS);
 
     return () => clearInterval(poll);
-  }, [groupId, gameId, phase]);
+  }, [isTournamentGame, groupId, gameId, phase]);
 
   const isActive = phase === "active";
   const isPaused = phase === "paused";
@@ -588,9 +661,10 @@ function GamePage() {
       <img src={vsBadge} alt="VS" className="gp-idle-badge" />
       <h1 className="gp-idle-title">Pick Sides</h1>
       <p className="gp-idle-sub">
-        Assign group members to Side&nbsp;A or Side&nbsp;B.
-        <br />
-        First to {SCORE_THRESHOLD} · win by {WIN_MARGIN}.
+        {isTournamentGame
+          ? <>Teams are pre-assigned from the bracket.<br />First to {goalsToWin} · win by {winBy}.</>
+          : <>Assign group members to Side&nbsp;A or Side&nbsp;B.<br />First to {goalsToWin} · win by {winBy}.</>
+        }
       </p>
 
       <div className="gp-team-picker">
@@ -601,7 +675,7 @@ function GamePage() {
             <AnimatePresence initial={false}>
             {sideA.map((m) => (
               <motion.div
-                key={m.user_id}
+                key={m.key}
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
@@ -610,20 +684,13 @@ function GamePage() {
               >
                 <button
                   className="gp-pick-chip gp-pick-chip--a"
-                  onClick={() => unassignPlayer(m)}
-                  title="Remove from Side A"
+                  onClick={() => !isTournamentGame && unassignPlayer(m)}
+                  title={isTournamentGame ? m.name : "Remove from Side A"}
+                  style={isTournamentGame ? { cursor: "default" } : undefined}
                 >
-                  {m.image_url ? (
-                    <img
-                      src={resolveImageUrl(m.image_url) ?? ""}
-                      alt={m.name}
-                      className="gp-pick-avatar"
-                    />
-                  ) : (
-                    <div className="gp-pick-avatar gp-pick-avatar--empty" />
-                  )}
+                  <UserAvatar name={m.name} imageUrl={m.image_url} className="gp-pick-avatar-wrap" fallbackClassName="text-[10px]" />
                   <span>{m.name}</span>
-                  <span className="gp-pick-x">✕</span>
+                  {!isTournamentGame && <span className="gp-pick-x">✕</span>}
                 </button>
               </motion.div>
             ))}
@@ -641,7 +708,7 @@ function GamePage() {
             <AnimatePresence initial={false}>
             {sideB.map((m) => (
               <motion.div
-                key={m.user_id}
+                key={m.key}
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
@@ -650,20 +717,13 @@ function GamePage() {
               >
                 <button
                   className="gp-pick-chip gp-pick-chip--b"
-                  onClick={() => unassignPlayer(m)}
-                  title="Remove from Side B"
+                  onClick={() => !isTournamentGame && unassignPlayer(m)}
+                  title={isTournamentGame ? m.name : "Remove from Side B"}
+                  style={isTournamentGame ? { cursor: "default" } : undefined}
                 >
-                  {m.image_url ? (
-                    <img
-                      src={resolveImageUrl(m.image_url) ?? ""}
-                      alt={m.name}
-                      className="gp-pick-avatar"
-                    />
-                  ) : (
-                    <div className="gp-pick-avatar gp-pick-avatar--empty" />
-                  )}
+                  <UserAvatar name={m.name} imageUrl={m.image_url} className="gp-pick-avatar-wrap" fallbackClassName="text-[10px]" />
                   <span>{m.name}</span>
-                  <span className="gp-pick-x">✕</span>
+                  {!isTournamentGame && <span className="gp-pick-x">✕</span>}
                 </button>
               </motion.div>
             ))}
@@ -677,37 +737,39 @@ function GamePage() {
 
       {/* Action row: Auto Balance + Start/Play Again */}
       <div className="gp-action-row">
-        <button
-          className="gp-btn gp-btn--balance"
-          onClick={autoBalance}
-          disabled={sideA.length + sideB.length < 2}
-          title="Auto-balance teams by skill rating"
-        >
-          <Sparkles className="gp-sparkle-icon" />
-          Auto Balance
-          {balanceInfo && (
-            <span className="gp-balance-dot" style={{ background: balanceInfo.color }} />
-          )}
-        </button>
+        {!isTournamentGame && (
+          <button
+            className="gp-btn gp-btn--balance"
+            onClick={autoBalance}
+            disabled={sideA.length + sideB.length < 2}
+            title="Auto-balance teams by skill rating"
+          >
+            <Sparkles className="gp-sparkle-icon" />
+            Auto Balance
+            {balanceInfo && (
+              <span className="gp-balance-dot" style={{ background: balanceInfo.color }} />
+            )}
+          </button>
+        )}
 
         <button
           className="gp-btn gp-btn--primary"
           onClick={onAction}
           disabled={sideA.length === 0 || sideB.length === 0 || saving}
         >
-          {saving ? "Creating…" : actionLabel}
+          {saving ? "Starting…" : actionLabel}
         </button>
       </div>
 
-      {/* Unassigned players */}
-      {unassigned.length > 0 && (
+      {/* Unassigned players — group context only */}
+      {!isTournamentGame && unassigned.length > 0 && (
         <div className="gp-unassigned">
           <h4 className="gp-unassigned-title">Available Players</h4>
           <div className="gp-unassigned-list">
             <AnimatePresence initial={false}>
             {unassigned.map((m) => (
               <motion.div
-                key={m.user_id}
+                key={m.key}
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
@@ -715,15 +777,7 @@ function GamePage() {
                 style={{ overflow: "hidden" }}
               >
                 <div className="gp-unassigned-player">
-                {m.image_url ? (
-                  <img
-                    src={resolveImageUrl(m.image_url) ?? ""}
-                    alt={m.name}
-                    className="gp-pick-avatar"
-                  />
-                ) : (
-                  <div className="gp-pick-avatar gp-pick-avatar--empty" />
-                )}
+                <UserAvatar name={m.name} imageUrl={m.image_url} className="gp-pick-avatar-wrap" fallbackClassName="text-[10px]" />
                 <span className="gp-unassigned-name">{m.name}</span>
                 <button
                   className="gp-assign-btn gp-assign-btn--a"
@@ -745,14 +799,20 @@ function GamePage() {
         </div>
       )}
 
-      <Link to={`/group/${groupId}`} className="gp-btn">
-        ← Back to Group
-      </Link>
+      {isTournamentGame ? (
+        <Link to={`/tournament/${slug}`} className="gp-btn">
+          ← Back to Tournament
+        </Link>
+      ) : (
+        <Link to={`/group/${groupId}`} className="gp-btn">
+          ← Back to Group
+        </Link>
+      )}
     </>
   );
 
   /* ── progress toward win ── */
-  const maxScore = Math.max(scoreA, scoreB, SCORE_THRESHOLD);
+  const maxScore = Math.max(scoreA, scoreB, goalsToWin);
   const progressA = maxScore > 0 ? (scoreA / maxScore) * 50 : 0;
   const progressB = maxScore > 0 ? (scoreB / maxScore) * 50 : 0;
 
@@ -761,11 +821,11 @@ function GamePage() {
   const sideBPlayers = phase === "setup" ? sideB : remotePlayers.filter((p) => p.side === "b");
   const sideALabel =
     sideAPlayers.length > 0
-      ? sideAPlayers.map((p) => ("name" in p ? p.name : "")).join(", ")
+      ? sideAPlayers.map((p) => p.name).join(", ")
       : "Side A";
   const sideBLabel =
     sideBPlayers.length > 0
-      ? sideBPlayers.map((p) => ("name" in p ? p.name : "")).join(", ")
+      ? sideBPlayers.map((p) => p.name).join(", ")
       : "Side B";
 
   /* ── loading ── */
@@ -807,7 +867,7 @@ function GamePage() {
             animate="show"
             exit="exit"
           >
-            {renderSidePicker("Start Match", startGame)}
+            {renderSidePicker("Start Match", isTournamentGame ? startTournamentGame : startGame)}
           </motion.div>
         )}
 
@@ -833,7 +893,7 @@ function GamePage() {
                 {isPaused ? "▶ Resume" : "⏸ Pause"}
               </motion.button>
               <span className="gp-topbar-label">
-                First to {SCORE_THRESHOLD} · Win by {WIN_MARGIN}
+                First to {goalsToWin} · Win by {winBy}
               </span>
               <motion.button
                 className="gp-topbar-btn gp-topbar-btn--danger"
@@ -863,25 +923,15 @@ function GamePage() {
                 </motion.span>
                 {/* player avatars */}
                 <div className="gp-side-players">
-                  {sideAPlayers.map((p) => {
-                    const imgUrl = resolveImageUrl(p.image_url);
-                    const name = "name" in p ? p.name : "";
-                    return imgUrl ? (
-                      <img
-                        key={p.user_id}
-                        src={imgUrl}
-                        alt={name}
-                        className="gp-side-player-avatar"
-                        title={name}
-                      />
-                    ) : (
-                      <div
-                        key={p.user_id}
-                        className="gp-side-player-avatar gp-side-player-avatar--empty"
-                        title={name}
-                      />
-                    );
-                  })}
+                  {sideAPlayers.map((p, i) => (
+                    <UserAvatar
+                      key={p.user_id ?? `a-avatar-${i}`}
+                      name={p.name}
+                      imageUrl={p.image_url}
+                      className="gp-side-player-avatar-wrap"
+                      fallbackClassName="text-[10px]"
+                    />
+                  ))}
                 </div>
                 <div className="gp-goal-area">
                   <img src={scoreBtnA} alt="Goal A" className="gp-goal-icon" />
@@ -918,25 +968,15 @@ function GamePage() {
                 </motion.span>
                 {/* player avatars */}
                 <div className="gp-side-players">
-                  {sideBPlayers.map((p) => {
-                    const imgUrl = resolveImageUrl(p.image_url);
-                    const name = "name" in p ? p.name : "";
-                    return imgUrl ? (
-                      <img
-                        key={p.user_id}
-                        src={imgUrl}
-                        alt={name}
-                        className="gp-side-player-avatar"
-                        title={name}
-                      />
-                    ) : (
-                      <div
-                        key={p.user_id}
-                        className="gp-side-player-avatar gp-side-player-avatar--empty"
-                        title={name}
-                      />
-                    );
-                  })}
+                  {sideBPlayers.map((p, i) => (
+                    <UserAvatar
+                      key={p.user_id ?? `b-avatar-${i}`}
+                      name={p.name}
+                      imageUrl={p.image_url}
+                      className="gp-side-player-avatar-wrap"
+                      fallbackClassName="text-[10px]"
+                    />
+                  ))}
                 </div>
                 <div className="gp-goal-area">
                   <img src={scoreBtnB} alt="Goal B" className="gp-goal-icon" />
@@ -1009,9 +1049,15 @@ function GamePage() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.5 }}
                 >
-                  <Link to={`/leaderboard/${groupId}`} className="gp-btn gp-btn--primary">
-                    Go to Leaderboard
-                  </Link>
+                  {isTournamentGame ? (
+                    <Link to={`/tournament/${slug}`} className="gp-btn gp-btn--primary">
+                      Back to Tournament
+                    </Link>
+                  ) : (
+                    <Link to={`/leaderboard/${groupId}`} className="gp-btn gp-btn--primary">
+                      Go to Leaderboard
+                    </Link>
+                  )}
                 </motion.div>
               </>
             )}
@@ -1025,8 +1071,16 @@ function GamePage() {
               </>
             )}
 
-            {/* Pick Sides (reused) */}
-            {renderSidePicker("Play Again", () => { resetToSetup(); startGame(); })}
+            {/* Pick Sides (reused) — or return for tournament */}
+            {isTournamentGame ? (
+              !isCompleted && (
+                <Link to={`/tournament/${slug}`} className="gp-btn gp-btn--primary" style={{ marginTop: "1rem" }}>
+                  Back to Tournament
+                </Link>
+              )
+            ) : (
+              renderSidePicker("Play Again", () => { resetToSetup(); startGame(); })
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -1075,24 +1129,23 @@ function GamePage() {
               <div className="gp-scorer-list">
                 {(() => {
                   // Show players from the side that performed the action
-                  const players: (GamePlayer | GroupMemberType)[] = remotePlayers.length > 0
-                    ? remotePlayers.filter((p) => p.side === attrSide)
+                  const players: PlayerInfo[] = remotePlayers.length > 0
+                    ? remotePlayers.filter((p) => p.side === attrSide).map((p, i) => ({ key: p.user_id ?? `${p.name}-${i}`, user_id: p.user_id, name: p.name, image_url: p.image_url }))
                     : (attrSide === "a" ? sideA : sideB);
-                  return players.map((p) => {
-                    const imgUrl = resolveImageUrl(p.image_url);
-                    const name = "name" in p ? p.name : "";
+                  return players.map((p, i) => {
                     return (
                       <button
-                        key={p.user_id}
+                        key={p.user_id ?? `scorer-${i}`}
                         className="gp-scorer-btn"
-                        onClick={() => confirmGoal(p.user_id)}
+                        onClick={() => confirmGoal(p.user_id, p.name)}
                       >
-                        {imgUrl ? (
-                          <img src={imgUrl} alt={name} className="gp-scorer-avatar" />
-                        ) : (
-                          <div className="gp-scorer-avatar gp-scorer-avatar--empty" />
-                        )}
-                        <span className="gp-scorer-name">{name}</span>
+                        <UserAvatar
+                          name={p.name}
+                          imageUrl={p.image_url}
+                          className="gp-scorer-avatar-wrap"
+                          fallbackClassName="text-xs"
+                        />
+                        <span className="gp-scorer-name">{p.name}</span>
                       </button>
                     );
                   });

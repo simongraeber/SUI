@@ -30,6 +30,7 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-'["http://localhost:5173"]'}
     volumes:
       - images:/data/images
+      - team_images:/data/team_images
     ports:
       - "8002:8000"
     depends_on:
@@ -52,3 +53,4 @@ services:
 volumes:
   pgdata:
   images:
+  team_images:
