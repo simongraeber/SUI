@@ -46,11 +46,9 @@ router = APIRouter(prefix="/images", tags=["images"])
 
 _IMAGE_PROMPT = (
     "You have 3 reference images. "
-    "The first two show the style of a solid plastic toy that was produced to represent a person as a table football player. "
-    "The last image is a picture of a real person. "
-    "Create a preview of how such a mini figure, customized for this person, would look like. "
-    "Use the style, posture and image layout of the first images but do not copy any elements. "
-    "Make sure the characteristics (such as face shape, skin tone, mouth, eyebrows, hair length, hair color, hair style, accessories such as glasses, earrings, ...) and clothing of the person in the real image are accurately represented."
+    "The first two images define ONLY the toy style, materials, rendering, and composition. They MUST NOT influence facial identity, age, or personal appearance. "
+    "The third image defines ONLY the person's identity (face, precise hair, body, exact clothing). It MUST be followed precisely. "
+    "Preserve exact face proportions, eye spacing and shape, nose width and length, lip shape, jawline and chin structure from the third image. "
     "- solid {bg_color} background"
 )
 
