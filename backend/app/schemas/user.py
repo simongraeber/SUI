@@ -1,7 +1,14 @@
 from datetime import datetime
+from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, StringConstraints
+
+
+DisplayName = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=80),
+]
 
 
 class UserResponse(BaseModel):
@@ -15,5 +22,5 @@ class UserResponse(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    name: str | None = None
+    name: DisplayName | None = None
     image_url: str | None = None

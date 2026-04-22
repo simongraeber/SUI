@@ -23,7 +23,7 @@ async def update_me(
 ):
     """Update the current user's profile."""
     if body.name is not None:
-        user.name = body.name
+        user.name = body.name.strip()
     if body.image_url is not None:
         user.image_url = body.image_url
     await db.commit()

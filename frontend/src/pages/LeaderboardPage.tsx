@@ -150,6 +150,7 @@ function LeaderboardPage() {
           id: "rank",
           header: "#",
           enableSorting: false,
+          meta: { className: "w-12 text-center" },
           cell: ({ row, table }) => {
             const player = row.original;
             if (player.provisional) {
@@ -157,10 +158,10 @@ function LeaderboardPage() {
                 <HoverCard>
                   <HoverCardTrigger asChild>
                     <span
-                      className="shrink-0 inline-flex items-center justify-center size-4 text-[9px] leading-none font-bold bg-muted text-muted-foreground rounded-full cursor-help"
+                      className="mx-auto inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold leading-none text-muted-foreground cursor-help"
                       aria-label="Provisional rating"
                     >
-                      P
+                      <span className="relative -top-px leading-none">P</span>
                     </span>
                   </HoverCardTrigger>
                   <HoverCardContent className="w-48 text-xs">
@@ -174,7 +175,7 @@ function LeaderboardPage() {
               .slice(0, row.index)
               .filter(r => !r.original.provisional).length + 1;
             return (
-              <span className="font-medium">
+              <span className="mx-auto inline-flex w-5 items-center justify-center font-medium leading-none">
                 {rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : rank}
               </span>
             );
