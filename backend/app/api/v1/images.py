@@ -17,17 +17,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/images", tags=["images"])
 
 _IMAGE_PROMPT = (
-    "A high-quality studio photograph of a custom foosball figurine. "
-    "IDENTITY (FOLLOW IMAGE 2 EXACTLY): Utilize the precise facial structure, eye shape, hair color, torso proportions, "
-    "and clothing style, fit, cut, and color for the entire torso from Image 2. "
-    "The figurine must look exactly like the person in Image 2. "
-    "STYLE & MATERIAL (FOLLOW IMAGE 1 ONLY): Apply the physical manufacturing properties from Image 1 to the character. This includes: "
-    "- Semi-gloss, injection-molded plastic skin texture with subtle mold lines. "
-    "- Distressed 'weathered' paint effects, including white scuffs and chipped paint flecks on the hair, face, and torso. "
-    "- The structural mounting: a horizontal brushed-metal rod passing through the figurine's torso. "
-    "ENVIRONMENT: Solid {bg_color} background with soft studio lighting. "
-    "CRITICAL: Do *not* use the facial features, eye paint style, clothing style, torso shape, or hairstyle from Image 1. "
-    "Use Image 2 for all anatomical, proportions and personal identity details, like accessories and colors, but translated into the new medium."
+    "A studio photograph of a custom foosball bust figurine, matching the composition and layout of IMAGE 1 against a solid {bg_color} background. "
+    "IDENTITY (FROM IMAGE 2 REAL PHOTO): The facial structure and eye shape are an exact match to the real person in IMAGE 2, preserving their unique identity and features. "
+    "The hairstyle and specific clothing (patterns, colors, and cuts) are also taken from IMAGE 2, but re-interpreted into the new medium. "
+    "STYLE & MATERIAL (ENFORCED FROM IMAGE 1): The entire figure is rendered as injection-molded plastic. "
+    "All skin and hair are solid, sculpted plastic forms. "
+    "All surfaces are worn with paint weathering similar to IMAGE 1. "
+    "ACCESSORIES: If the real person has unique extras like glasses in IMAGE 2, they are preserved as separate plastic add-ons."
 )
 
 
@@ -92,7 +88,7 @@ async def generate_profile_image(
     except Exception:
         raise HTTPException(status_code=400, detail="Could not read uploaded image")
 
-    if not settings.xai_api_key:
+    if not settings.openai_api_key:
         raise HTTPException(status_code=503, detail="Image generation is not configured")
 
     style_refs = get_style_reference_bytes()
@@ -106,7 +102,7 @@ async def generate_profile_image(
             aspect_ratio="1:1",
         )
     except Exception as exc:
-        logger.exception("xAI image edit failed: %s", exc)
+        logger.exception("OpenAI image edit failed: %s", exc)
         raise HTTPException(status_code=502, detail="Profile picture generation failed. Please try again.")
 
     return StreamingResponse(

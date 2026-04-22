@@ -1,9 +1,7 @@
-"""Shared xAI image generation service."""
+"""Shared OpenAI image generation service."""
 
-import base64
 import io
 import logging
-import random
 import uuid
 from pathlib import Path
 
@@ -27,39 +25,29 @@ BG_COLORS = [
     "dark red", "dark blue", "dark green", "dark yellow", "dark magenta",
 ]
 
-# ── Style references ─────────────────────────────────────────────────────────
+# ── Style references (shared) ───────────────────────────────────────────────
 
 _ASSETS_DIR = Path(__file__).parent.parent / "assets"
-_PROFILE_REF_DIR = _ASSETS_DIR / "style_reference_Profile"
-_TEAM_REF_DIR = _ASSETS_DIR / "style_reference_Team"
-
-_profile_reference_bytes: list[bytes] | None = None
-_team_reference_bytes: list[bytes] | None = None
-
-
-def _load_refs(directory: Path) -> list[bytes]:
-    refs = []
-    for path in sorted(directory.glob("*.png")):
-        if path.is_file():
-            refs.append(path.read_bytes())
-    logger.info("Loaded %d style reference images from %s", len(refs), directory)
-    return refs
+_STYLE_REFERENCE_PATHS = [_ASSETS_DIR / f"style_reference_{i}.png" for i in range(1, 7)]
+_style_reference_bytes: list[bytes] | None = None
 
 
 def get_style_reference_bytes() -> list[bytes]:
-    """Profile style references."""
-    global _profile_reference_bytes
-    if _profile_reference_bytes is None:
-        _profile_reference_bytes = _load_refs(_PROFILE_REF_DIR)
-    return _profile_reference_bytes
-
-
-def get_team_style_reference_bytes() -> list[bytes]:
-    """Team style references."""
-    global _team_reference_bytes
-    if _team_reference_bytes is None:
-        _team_reference_bytes = _load_refs(_TEAM_REF_DIR)
-    return _team_reference_bytes
+    """Load and cache the shared toy-style references used across image endpoints."""
+    global _style_reference_bytes
+    if _style_reference_bytes is None:
+        refs = []
+        for path in _STYLE_REFERENCE_PATHS:
+            if path.is_file():
+                img = Image.open(path).convert("RGBA")
+                img.thumbnail((768, 768), Image.LANCZOS)
+                buf = io.BytesIO()
+                img.save(buf, format="PNG")
+                refs.append(buf.getvalue())
+            else:
+                logger.warning("Style reference image not found at %s", path)
+        _style_reference_bytes = refs
+    return _style_reference_bytes
 
 
 # ── Single entry point ──────────────────────────────────────────────────────
@@ -71,33 +59,45 @@ async def generate_image(
     save_dir: Path,
     aspect_ratio: str = "auto",
 ) -> tuple[str, bytes]:
-    """Call xAI image-edit, save result as PNG, return (image_id, raw_bytes)."""
-    images_b64 = [
-        {"url": "data:image/png;base64," + base64.b64encode(img).decode()}
-        for img in input_images
+    """Call OpenAI image edits, save result as PNG, return (image_id, raw_bytes)."""
+    if not settings.openai_api_key:
+        raise ValueError("OPENAI_API_KEY is not configured")
+    timeout_seconds = float(settings.openai_image_timeout_seconds)
+
+    # OpenAI accepts fixed sizes; map requested aspect ratio to closest supported preset.
+    size = "1024x1024"
+    if aspect_ratio == "16:9":
+        size = "1536x1024"
+
+    files = [
+        ("image[]", (f"input_{idx}.png", img, "image/png"))
+        for idx, img in enumerate(input_images, start=1)
     ]
 
-    async with httpx.AsyncClient(timeout=120.0) as http:
+    data = {
+        "model": "gpt-image-2",
+        "prompt": prompt,
+        "size": size,
+        "output_format": "png",
+    }
+
+    async with httpx.AsyncClient(timeout=timeout_seconds) as http:
         resp = await http.post(
-            "https://api.x.ai/v1/images/edits",
-            headers={"Authorization": f"Bearer {settings.xai_api_key}"},
-            json={
-                "model": "grok-imagine-image",
-                "prompt": prompt,
-                "n": 1,
-                "aspect_ratio": aspect_ratio,
-                "resolution": "1k",
-                "images": images_b64,
-            },
+            "https://api.openai.com/v1/images/edits",
+            headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+            data=data,
+            files=files,
         )
     resp.raise_for_status()
     data = resp.json()
 
     item = data["data"][0]
     if "b64_json" in item:
+        import base64
+
         image_bytes = base64.b64decode(item["b64_json"])
     elif "url" in item:
-        async with httpx.AsyncClient(timeout=60.0) as http:
+        async with httpx.AsyncClient(timeout=timeout_seconds) as http:
             img_resp = await http.get(item["url"])
         img_resp.raise_for_status()
         image_bytes = img_resp.content

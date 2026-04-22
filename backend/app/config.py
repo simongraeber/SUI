@@ -12,8 +12,9 @@ class Settings(BaseSettings):
     # Gemini API (ask feature)
     gemini_api_key: str = ""
 
-    # xAI API (image generation)
-    xai_api_key: str = ""
+    # OpenAI API (image generation)
+    openai_api_key: str = ""
+    openai_image_timeout_seconds: int = 180
 
     # JWT
     jwt_secret: str
