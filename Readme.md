@@ -3,6 +3,10 @@
 
 A mobile-first web app for tracking competitive team games (starting with *Tischkicker*). Users sign in with Google, join groups via invite links, start matches, track goals in real time, and compete on fair, statistically-weighted leaderboards.
 
+## Live App
+
+Use SIU for free at: https://someoneisunbeatable.de/
+
 ---
 
 ## Quick Start
@@ -11,7 +15,8 @@ A mobile-first web app for tracking competitive team games (starting with *Tisch
 
 - Docker & Docker Compose
 - A [Google OAuth 2.0](https://console.cloud.google.com/apis/credentials) client ID / secret
-- (Optional) A [Gemini API key](https://aistudio.google.com/apikey) for AI-generated player avatars and data analysis.
+- (Optional) A [Gemini API key](https://aistudio.google.com/apikey) for Ask AI features.
+- (Optional) An [OpenAI API key](https://platform.openai.com/api-keys) for AI image generation.
 
 ### Run with Docker Compose
 
@@ -53,8 +58,9 @@ Copy `.env.example` → `.env` and fill in the values:
 | `GOOGLE_CLIENT_SECRET` | Google OAuth 2.0 client secret |
 | `JWT_SECRET` | Signing key for JWTs — generate with `openssl rand -hex 32` |
 | `CORS_ORIGINS` | JSON array of allowed origins |
-| `GEMINI_API_KEY` | Google Gemini API key (for AI avatar generation) |
-| `DATABASE_URL_READONLY` | (Optional) Separate read-only DB connection URL for the query endpoint |
+| `GEMINI_API_KEY` | Google Gemini API key (for Ask AI features) |
+| `OPENAI_API_KEY` | OpenAI API key (for image generation endpoints) |
+| `OPENAI_IMAGE_TIMEOUT_SECONDS` | Image generation timeout in seconds (default: 180) |
 | `POSTGRES_PASSWORD` | Database password (used in production compose) |
 
 The frontend needs its own env file (`frontend/.env.example` → `frontend/.env.development`):
@@ -77,7 +83,7 @@ The frontend needs its own env file (`frontend/.env.example` → `frontend/.env.
 | Database | PostgreSQL 16 |
 | ORM | SQLAlchemy (async) + asyncpg |
 | Auth | Google OAuth 2.0 → JWT |
-| AI Avatars | Google Gemini API |
+| AI | Gemini (Ask AI) + OpenAI Images (`gpt-image-2`) |
 | Deployment | Docker Compose + GitHub Actions |
 
 ---
@@ -108,7 +114,10 @@ The frontend needs its own env file (`frontend/.env.example` → `frontend/.env.
 │       │   ├── group.py
 │       │   └── game.py
 │       ├── services/
-│       │   └── auth.py             # Google token verification, JWT issuing
+│       │   ├── auth.py             # Google token verification, JWT issuing
+│       │   ├── ai.py               # Ask AI prompt handling
+│       │   ├── image.py            # Shared OpenAI image generation service
+│       │   └── tournament.py       # Tournament generation and management
 │       └── api/
 │           ├── deps.py             # Dependency injection (current user, DB session)
 │           └── v1/
@@ -116,9 +125,12 @@ The frontend needs its own env file (`frontend/.env.example` → `frontend/.env.
 │               ├── auth.py         # Google OAuth endpoints
 │               ├── users.py        # User profile CRUD
 │               ├── groups.py       # Group CRUD, invites, memberships
-│               ├── games.py        # Game lifecycle + goals + leaderboard
+│               ├── games.py        # Group game lifecycle + goals + leaderboard
+│               ├── game.py         # Single game operations
+│               ├── tournaments.py  # Tournament endpoints
+│               ├── ask.py          # Ask AI endpoint
 │               ├── query.py        # Read-only SQL query endpoint
-│               └── images.py       # Image upload/retrieval (Gemini avatars)
+│               └── images.py       # Profile/team image upload + AI generation
 │
 └── frontend/
     ├── Dockerfile                  # Multi-stage: node build → nginx serve
@@ -148,8 +160,10 @@ The frontend needs its own env file (`frontend/.env.example` → `frontend/.env.
         │   ├── JoinGroupPage.tsx   # Accept invite link
         │   ├── GamePage.tsx        # Live game board
         │   ├── LeaderboardPage.tsx # Sortable rankings
-        │   ├── PlayerPage.tsx      # Player stats detail
+        │   ├── MemberPage.tsx      # Member stats detail
+        │   ├── TournamentPage.tsx  # Tournament view
         │   ├── ProfilePage.tsx     # Edit profile
+        │   ├── NotFoundPage.tsx
         │   ├── ImprintPage.tsx
         │   ├── PrivacyPage.tsx
         │   └── TermsPage.tsx

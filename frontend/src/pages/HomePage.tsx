@@ -3,6 +3,7 @@ import Section from "../components/Section";
 import FeatureCard from "../components/FeatureCard";
 import StepCard from "../components/StepCard";
 import { motion } from "framer-motion";
+import { ExternalLink } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import LinkButton from "@/components/LinkButton";
 import { featureContainerVariants } from "@/lib/animations";
@@ -82,6 +83,46 @@ function HomePage() {
             title="Invite & Play"
             description="Share your invite link, start a match, and track goals in real time across every device."
           />
+        </div>
+      </Section>
+
+      <Section title="Watch SIU in Action">
+        <div className="mx-auto max-w-4xl">
+          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-lg">
+            <div className="relative w-full pb-[56.25%]">
+              <iframe
+                className="absolute left-0 top-0 h-full w-full"
+                src="https://www.youtube-nocookie.com/embed/I19aq_isAMI"
+                title="Someone Is Unbeatable - Demo Video"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+              />
+            </div>
+          </div>
+
+          <p className="mt-3 text-center text-xs opacity-60">
+            By pressing play, you agree to YouTube&apos;s{" "}
+            <a
+              href="https://www.youtube.com/t/terms"
+              target="_blank"
+              rel="noreferrer"
+              className="underline"
+            >
+              Terms of Service
+            </a>{" "}
+            and{" "}
+            <a
+              href="https://policies.google.com/privacy"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 underline"
+            >
+              Privacy Policy
+              <ExternalLink className="size-3" />
+            </a>
+            .
+          </p>
         </div>
       </Section>
 
