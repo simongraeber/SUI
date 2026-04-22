@@ -30,7 +30,7 @@ from app.schemas.tournament import (
     TournamentTeamResponse,
 )
 from fastapi.responses import StreamingResponse
-from app.services.image import BG_COLORS, IMAGES_DIR, TEAM_IMAGES_DIR, generate_image, get_style_reference_bytes
+from app.services.image import BG_COLORS, IMAGES_DIR, TEAM_IMAGES_DIR, generate_image, get_team_style_reference_bytes
 from app.services.tournament import apply_match_result, generate_bracket
 
 logger = logging.getLogger(__name__)
@@ -492,11 +492,10 @@ async def get_team_image(filename: str):
 # ── AI team image from upload ────────────────────────────────
 
 _TEAM_UPLOAD_PROMPT = (
-    "You have 3 reference images. "
-    "The first two images define ONLY the toy style, materials, rendering, and composition. They MUST NOT influence the subject identity. "
-    "The third image is the team image to restyle in the toy aesthetic. "
-    "Preserve the composition, number of subjects, and overall layout of the third image. "
-    "Render it in the same toy-figure style as the first two references. "
+    "Image 1 defines ONLY the toy style, materials, rendering, and composition. It MUST NOT influence the subject identity. "
+    "Image 2 is the team image to restyle in the toy aesthetic. "
+    "Preserve the composition, number of subjects, and subjects details of Image 2. "
+    "Render it in the same toy-figure style as Image 1. "
     "- landscape 16:9 aspect ratio "
     "- solid {bg_color} background"
 )
@@ -537,8 +536,8 @@ async def generate_team_image_from_upload(
     except Exception:
         raise HTTPException(status_code=400, detail="Could not read uploaded image")
 
-    style_refs = get_style_reference_bytes()
-    selected_refs = random.sample(style_refs, min(2, len(style_refs))) if style_refs else []
+    style_refs = get_team_style_reference_bytes()
+    selected_refs = [random.choice(style_refs)] if style_refs else []
 
     bg_color = random.choice(BG_COLORS)
     try:

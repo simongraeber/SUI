@@ -27,28 +27,39 @@ BG_COLORS = [
     "dark red", "dark blue", "dark green", "dark yellow", "dark magenta",
 ]
 
-# ── Style references (profile pics) ─────────────────────────────────────────
+# ── Style references ─────────────────────────────────────────────────────────
 
 _ASSETS_DIR = Path(__file__).parent.parent / "assets"
-_STYLE_REFERENCE_PATHS = [_ASSETS_DIR / f"style_reference_{i}.png" for i in range(1, 7)]
-_style_reference_bytes: list[bytes] | None = None
+_PROFILE_REF_DIR = _ASSETS_DIR / "style_reference_Profile"
+_TEAM_REF_DIR = _ASSETS_DIR / "style_reference_Team"
+
+_profile_reference_bytes: list[bytes] | None = None
+_team_reference_bytes: list[bytes] | None = None
+
+
+def _load_refs(directory: Path) -> list[bytes]:
+    refs = []
+    for path in sorted(directory.glob("*.png")):
+        if path.is_file():
+            refs.append(path.read_bytes())
+    logger.info("Loaded %d style reference images from %s", len(refs), directory)
+    return refs
 
 
 def get_style_reference_bytes() -> list[bytes]:
-    global _style_reference_bytes
-    if _style_reference_bytes is None:
-        refs = []
-        for path in _STYLE_REFERENCE_PATHS:
-            if path.is_file():
-                img = Image.open(path).convert("RGBA")
-                img.thumbnail((768, 768), Image.LANCZOS)
-                buf = io.BytesIO()
-                img.save(buf, format="PNG")
-                refs.append(buf.getvalue())
-            else:
-                logger.warning("Style reference image not found at %s", path)
-        _style_reference_bytes = refs
-    return _style_reference_bytes
+    """Profile style references."""
+    global _profile_reference_bytes
+    if _profile_reference_bytes is None:
+        _profile_reference_bytes = _load_refs(_PROFILE_REF_DIR)
+    return _profile_reference_bytes
+
+
+def get_team_style_reference_bytes() -> list[bytes]:
+    """Team style references."""
+    global _team_reference_bytes
+    if _team_reference_bytes is None:
+        _team_reference_bytes = _load_refs(_TEAM_REF_DIR)
+    return _team_reference_bytes
 
 
 # ── Single entry point ──────────────────────────────────────────────────────
