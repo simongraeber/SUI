@@ -5,7 +5,8 @@ import LinkButton from "@/components/LinkButton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import UserAvatar from "@/components/UserAvatar";
-import { ArrowLeft, Users, Gamepad2, Copy, Check, LogOut, BarChart3 } from "lucide-react";
+import ShareLinkActions from "@/components/ShareLinkActions";
+import { ArrowLeft, Users, Gamepad2, Copy, LogOut, BarChart3 } from "lucide-react";
 import { motion } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,7 +20,6 @@ function GroupPage() {
   const navigate = useNavigate();
   const [group, setGroup] = useState<GroupDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [copied, setCopied] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [pendingMemberId, setPendingMemberId] = useState<string | null>(null);
 
@@ -30,14 +30,6 @@ function GroupPage() {
       .catch(() => navigate("/dashboard", { replace: true }))
       .finally(() => setLoading(false));
   }, [groupId, navigate]);
-
-  const handleCopyInvite = async () => {
-    if (!group) return;
-    const url = `${window.location.origin}/group/${group.id}/join?code=${group.invite_code}`;
-    await navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   const handleLeave = async () => {
     if (!groupId) return;
@@ -63,9 +55,9 @@ function GroupPage() {
           <BarChart3 className="size-4 mr-1" />
           Leaderboard
         </LinkButton>
-        <Button variant="outline" onClick={handleCopyInvite}>
-          {copied ? <Check className="size-4 mr-1" /> : <Copy className="size-4 mr-1" />}
-          {copied ? "Copied!" : "Copy Invite Link"}
+        <Button variant="outline" disabled>
+          <Copy className="size-4 mr-1" />
+          Copy Link
         </Button>
       </div>
 
@@ -127,10 +119,11 @@ function GroupPage() {
           <BarChart3 className="size-4 mr-1" />
           Leaderboard
         </LinkButton>
-        <Button variant="outline" onClick={handleCopyInvite}>
-          {copied ? <Check className="size-4 mr-1" /> : <Copy className="size-4 mr-1" />}
-          {copied ? "Copied!" : "Copy Invite Link"}
-        </Button>
+        <ShareLinkActions
+          getUrl={() => `${window.location.origin}/group/${group.id}/join?code=${group.invite_code}`}
+          copyLabel="Copy Invite Link"
+          shareTitle={group.name}
+        />
       </div>
 
       {/* Members */}

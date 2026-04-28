@@ -5,8 +5,6 @@ import { toast } from "sonner";
 import {
   Trophy,
   Users,
-  Copy,
-  Check,
   Play,
   Trash2,
   ArrowLeft,
@@ -20,6 +18,7 @@ import BracketView from "@/components/BracketView";
 import { TeamPlayerManager, RoundSettings } from "@/components/TournamentHelpers";
 import UserAvatar from "@/components/UserAvatar";
 import ImageUploadDialog, { type ImageUploadDialogHandle } from "@/components/ImageUploadDialog";
+import ShareLinkActions from "@/components/ShareLinkActions";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -67,7 +66,6 @@ export default function TournamentPage() {
   const [tournament, setTournament] = useState<TournamentDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const [teamName, setTeamName] = useState("");
   const [registerLoading, setRegisterLoading] = useState(false);
   const [startLoading, setStartLoading] = useState(false);
@@ -129,12 +127,6 @@ export default function TournamentPage() {
       } catch { /* ignore */ }
     })();
   }, [user]);
-
-  const handleCopyLink = async () => {
-    await navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   const handleRegister = async () => {
     if (!slug || !teamName.trim()) return;
@@ -291,10 +283,11 @@ export default function TournamentPage() {
       <motion.div variants={staggerContainer} initial="hidden" animate="show" className="space-y-2 mb-6">
         <motion.div variants={fadeUp} className="flex justify-center gap-2 flex-wrap">
           <Badge variant={statusVariant[tournament.status]}>{statusLabel[tournament.status]}</Badge>
-          <Button variant="outline" size="sm" onClick={handleCopyLink}>
-            {copied ? <Check className="size-4 mr-1" /> : <Copy className="size-4 mr-1" />}
-            {copied ? "Copied!" : "Share link"}
-          </Button>
+          <ShareLinkActions
+            getUrl={() => window.location.href}
+            copyLabel="Copy Invite Link"
+            shareTitle={tournament.name}
+          />
         </motion.div>
 
 
