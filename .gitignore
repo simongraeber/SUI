@@ -38,3 +38,6 @@ pgdata/
 # Misc
 *.log
 group
+
+# graphify
+graphify-out/
