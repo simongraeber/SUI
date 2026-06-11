@@ -806,9 +806,9 @@
 .gp-pick-name {
   flex: 1;
   text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.25;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .gp-pick-x {
