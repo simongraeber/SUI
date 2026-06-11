@@ -736,6 +736,9 @@
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+  flex: 1;
+  border-radius: 12px;
+  transition: background 0.16s ease, box-shadow 0.16s ease;
 }
 
 /* player chip */
@@ -750,16 +753,44 @@
   color: #e2e8f0;
   font-size: 0.85rem;
   font-family: inherit;
-  cursor: pointer;
-  transition: background 0.2s, border-color 0.2s;
-  text-align: left;
+  transition: background 0.2s, border-color 0.2s, opacity 0.2s;
   width: 100%;
   min-height: 44px;
-  -webkit-tap-highlight-color: transparent;
 }
 .gp-pick-chip:hover       { background: var(--gp-glass-hover); }
 .gp-pick-chip--a:hover    { border-color: rgba(96, 165, 250, 0.35); }
 .gp-pick-chip--b:hover    { border-color: rgba(248, 113, 113, 0.35); }
+
+/* DND states */
+.gp-dragging {
+  opacity: 0.38;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  background: var(--gp-glass-hover);
+}
+.gp-drag-overlay {
+  position: relative;
+  z-index: 2147483647;
+  cursor: grabbing;
+  pointer-events: none;
+  opacity: 1;
+  background: rgba(30, 41, 59, 0.92);
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow:
+    0 18px 44px rgba(0, 0, 0, 0.42),
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 28px rgba(129, 140, 248, 0.28);
+}
+.gp-drag-overlay .gp-drag-handle {
+  opacity: 1;
+  cursor: grabbing;
+}
+.gp-droppable-over {
+  background: rgba(168, 85, 247, 0.12);
+  box-shadow:
+    inset 0 0 0 2px rgba(168, 85, 247, 0.65),
+    inset 0 0 18px rgba(168, 85, 247, 0.12),
+    0 10px 24px rgba(168, 85, 247, 0.18);
+}
 
 .gp-pick-avatar {
   width: 42px;
@@ -772,13 +803,38 @@
   background: rgba(255, 255, 255, 0.12);
 }
 
+.gp-pick-name {
+  flex: 1;
+  text-align: left;
+  line-height: 1.25;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .gp-pick-x {
-  margin-left: auto;
   font-size: 0.75rem;
   opacity: 0.4;
   transition: opacity 0.2s;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0.25rem;
 }
 .gp-pick-chip:hover .gp-pick-x { opacity: 1; }
+
+.gp-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.4;
+  cursor: grab;
+  padding: 0.25rem;
+  touch-action: none; /* Crucial for dnd-kit touch sensor */
+  transition: opacity 0.2s;
+}
+.gp-pick-chip:hover .gp-drag-handle { opacity: 1; }
+.gp-drag-handle:active { cursor: grabbing; }
 
 .gp-pick-empty {
   font-size: 0.78rem;

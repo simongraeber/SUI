@@ -1,7 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Sparkles } from "lucide-react";
+import { Sparkles, GripVertical } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { DndContext, DragOverlay, useDraggable, useDroppable, PointerSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
+import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import { popIn } from "@/lib/animations";
 import { useAuth } from "@/lib/AuthContext";
 import UserAvatar from "@/components/UserAvatar";
@@ -44,6 +46,7 @@ type Side = "a" | "b";
 
 /** Minimal player shape shared by group members and tournament players. */
 type PlayerInfo = { key: string; user_id: string | null; name: string; image_url: string | null };
+type ActiveDragPlayer = { key: string; member: PlayerInfo; side: Side };
 
 const SYNC_INTERVAL_MS = 2000;
 
@@ -83,6 +86,57 @@ const scoreBump = {
     transition: { duration: 0.35 },
   },
 };
+
+/* ── components for DND ── */
+function DroppableSide({ side, children }: { side: Side, children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: side });
+  return (
+    <div ref={setNodeRef} className={`gp-pick-list ${isOver ? 'gp-droppable-over' : ''}`}>
+      {children}
+    </div>
+  );
+}
+
+function PlayerChipContent({ member, isTournamentGame, onUnassign, showHandle = true }: { member: PlayerInfo, isTournamentGame: boolean, onUnassign?: (m: PlayerInfo) => void, showHandle?: boolean }) {
+  return (
+    <>
+      {!isTournamentGame && onUnassign && (
+        <button type="button" className="gp-pick-x" onClick={() => onUnassign(member)} title="Remove from side">✕</button>
+      )}
+      <UserAvatar name={member.name} imageUrl={member.image_url} className="gp-pick-avatar-wrap" fallbackClassName="text-[10px]" />
+      <span className="gp-pick-name">{member.name}</span>
+      {!isTournamentGame && showHandle && (
+        <div className="gp-drag-handle">
+          <GripVertical size={16} />
+        </div>
+      )}
+    </>
+  );
+}
+
+function DraggablePlayerChip({ member, side, isTournamentGame, onUnassign, isActiveDrag }: { member: PlayerInfo, side: Side, isTournamentGame: boolean, onUnassign: (m: PlayerInfo) => void, isActiveDrag: boolean }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: member.key,
+    data: { member, side },
+    disabled: isTournamentGame,
+  });
+  const style = transform && !isActiveDrag ? {
+    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+    opacity: isDragging ? 0.9 : 1,
+  } : undefined;
+
+  // The outer div handles animation from Framer Motion, inner div handles DND positioning.
+  return (
+    <div ref={setNodeRef} style={style} className={`gp-pick-chip gp-pick-chip--${side} ${isDragging ? 'gp-dragging' : ''}`}>
+      <PlayerChipContent member={member} isTournamentGame={isTournamentGame} onUnassign={onUnassign} showHandle={false} />
+      {!isTournamentGame && (
+        <div className="gp-drag-handle" {...listeners} {...attributes}>
+          <GripVertical size={16} />
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ── component ── */
 function GamePage() {
@@ -140,9 +194,17 @@ function GamePage() {
   const [attrSide, setAttrSide] = useState<Side>("a");
   const [friendlyFire, setFriendlyFire] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [activeDragKey, setActiveDragKey] = useState<string | null>(null);
+  const [activeDragPlayer, setActiveDragPlayer] = useState<ActiveDragPlayer | null>(null);
 
   // ELO data for auto-balancing
   const [eloMap, setEloMap] = useState<Map<string, number>>(new Map());
+
+  // DND Sensors (require minimum movement to distinguish from clicks)
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
+  );
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const syncRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -171,7 +233,7 @@ function GamePage() {
   }, [groupId, refreshUser]);
   useEffect(() => {
     if (phase !== "active") {
-      wakeLockRef.current?.release().catch(() => {});
+      wakeLockRef.current?.release().catch(() => { });
       wakeLockRef.current = null;
       return;
     }
@@ -196,7 +258,7 @@ function GamePage() {
     return () => {
       released = true;
       document.removeEventListener("visibilitychange", onVisibility);
-      wakeLockRef.current?.release().catch(() => {});
+      wakeLockRef.current?.release().catch(() => { });
       wakeLockRef.current = null;
     };
   }, [phase]);
@@ -393,6 +455,43 @@ function GamePage() {
     setSideA((prev) => prev.filter((m) => m.key !== member.key));
     setSideB((prev) => prev.filter((m) => m.key !== member.key));
     setUnassigned((prev) => [...prev, member]);
+  }, []);
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    const member = event.active.data.current?.member as PlayerInfo | undefined;
+    const side = event.active.data.current?.side as Side | undefined;
+    const key = String(event.active.id);
+
+    setActiveDragKey(key);
+    if (member && side) {
+      setActiveDragPlayer({ key, member, side });
+    }
+  }, []);
+
+  const handleDragCancel = useCallback(() => {
+    setActiveDragKey(null);
+    setActiveDragPlayer(null);
+  }, []);
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveDragKey(null);
+    setActiveDragPlayer(null);
+    if (!over) return;
+
+    const member = active.data.current?.member as PlayerInfo;
+    const currentSide = active.data.current?.side as Side;
+    const targetSide = over.id as Side;
+
+    if (currentSide === targetSide) return;
+
+    if (targetSide === "a") {
+      setSideB((prev) => prev.filter((m) => m.key !== member.key));
+      setSideA((prev) => [...prev, member]);
+    } else if (targetSide === "b") {
+      setSideA((prev) => prev.filter((m) => m.key !== member.key));
+      setSideB((prev) => [...prev, member]);
+    }
   }, []);
 
   /* ── auto-balance: distribute assigned players for fairest teams ── */
@@ -668,71 +767,89 @@ function GamePage() {
       </p>
 
       <div className="gp-team-picker">
-        {/* Side A */}
-        <div className="gp-pick-side gp-pick-side--a">
-          <h3 className="gp-pick-side-title gp-pick-side-title--a">Side A</h3>
-          <div className="gp-pick-list">
-            <AnimatePresence initial={false}>
-            {sideA.map((m) => (
-              <motion.div
-                key={m.key}
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.25, ease: "easeInOut" }}
-                style={{ overflow: "hidden" }}
-              >
-                <button
-                  className="gp-pick-chip gp-pick-chip--a"
-                  onClick={() => !isTournamentGame && unassignPlayer(m)}
-                  title={isTournamentGame ? m.name : "Remove from Side A"}
-                  style={isTournamentGame ? { cursor: "default" } : undefined}
-                >
-                  <UserAvatar name={m.name} imageUrl={m.image_url} className="gp-pick-avatar-wrap" fallbackClassName="text-[10px]" />
-                  <span>{m.name}</span>
-                  {!isTournamentGame && <span className="gp-pick-x">✕</span>}
-                </button>
-              </motion.div>
-            ))}
-            </AnimatePresence>
-            {sideA.length === 0 && (
-              <p className="gp-pick-empty">Tap a player below to add</p>
-            )}
+        <DndContext sensors={sensors} autoScroll={false} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
+          {/* Side A */}
+          <div className="gp-pick-side gp-pick-side--a">
+            <h3 className="gp-pick-side-title gp-pick-side-title--a">Side A</h3>
+            <DroppableSide side="a">
+              <AnimatePresence initial={false}>
+                {sideA.map((m) => (
+                  <motion.div
+                    key={m.key}
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.25, ease: "easeInOut" }}
+                    style={{
+                      overflow: activeDragKey === m.key ? "visible" : "hidden",
+                      position: "relative",
+                      zIndex: activeDragKey === m.key ? 1000 : undefined,
+                    }}
+                  >
+                    <DraggablePlayerChip
+                      member={m}
+                      side="a"
+                      isTournamentGame={isTournamentGame}
+                      onUnassign={unassignPlayer}
+                      isActiveDrag={activeDragKey === m.key}
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+              {sideA.length === 0 && (
+                <p className="gp-pick-empty">Tap a player below to add</p>
+              )}
+            </DroppableSide>
           </div>
-        </div>
 
-        {/* Side B */}
-        <div className="gp-pick-side gp-pick-side--b">
-          <h3 className="gp-pick-side-title gp-pick-side-title--b">Side B</h3>
-          <div className="gp-pick-list">
-            <AnimatePresence initial={false}>
-            {sideB.map((m) => (
-              <motion.div
-                key={m.key}
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.25, ease: "easeInOut" }}
-                style={{ overflow: "hidden" }}
-              >
-                <button
-                  className="gp-pick-chip gp-pick-chip--b"
-                  onClick={() => !isTournamentGame && unassignPlayer(m)}
-                  title={isTournamentGame ? m.name : "Remove from Side B"}
-                  style={isTournamentGame ? { cursor: "default" } : undefined}
-                >
-                  <UserAvatar name={m.name} imageUrl={m.image_url} className="gp-pick-avatar-wrap" fallbackClassName="text-[10px]" />
-                  <span>{m.name}</span>
-                  {!isTournamentGame && <span className="gp-pick-x">✕</span>}
-                </button>
-              </motion.div>
-            ))}
-            </AnimatePresence>
-            {sideB.length === 0 && (
-              <p className="gp-pick-empty">Tap a player below to add</p>
-            )}
+          {/* Side B */}
+          <div className="gp-pick-side gp-pick-side--b">
+            <h3 className="gp-pick-side-title gp-pick-side-title--b">Side B</h3>
+            <DroppableSide side="b">
+              <AnimatePresence initial={false}>
+                {sideB.map((m) => (
+                  <motion.div
+                    key={m.key}
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.25, ease: "easeInOut" }}
+                    style={{
+                      overflow: activeDragKey === m.key ? "visible" : "hidden",
+                      position: "relative",
+                      zIndex: activeDragKey === m.key ? 1000 : undefined,
+                    }}
+                  >
+                    <DraggablePlayerChip
+                      member={m}
+                      side="b"
+                      isTournamentGame={isTournamentGame}
+                      onUnassign={unassignPlayer}
+                      isActiveDrag={activeDragKey === m.key}
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+              {sideB.length === 0 && (
+                <p className="gp-pick-empty">Tap a player below to add</p>
+              )}
+            </DroppableSide>
           </div>
-        </div>
+          <DragOverlay zIndex={2147483647} dropAnimation={null}>
+            {activeDragPlayer ? (
+              <div className={`gp-pick-chip gp-pick-chip--${activeDragPlayer.side} gp-drag-overlay`}>
+                <PlayerChipContent
+                  member={activeDragPlayer.member}
+                  isTournamentGame={isTournamentGame}
+                  showHandle={false}
+                />
+                <div className="gp-drag-handle">
+                  <GripVertical size={16} />
+                </div>
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       </div>
 
       {/* Action row: Auto Balance + Start/Play Again */}
@@ -767,33 +884,33 @@ function GamePage() {
           <h4 className="gp-unassigned-title">Available Players</h4>
           <div className="gp-unassigned-list">
             <AnimatePresence initial={false}>
-            {unassigned.map((m) => (
-              <motion.div
-                key={m.key}
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.25, ease: "easeInOut" }}
-                style={{ overflow: "hidden" }}
-              >
-                <div className="gp-unassigned-player">
-                <UserAvatar name={m.name} imageUrl={m.image_url} className="gp-pick-avatar-wrap" fallbackClassName="text-[10px]" />
-                <span className="gp-unassigned-name">{m.name}</span>
-                <button
-                  className="gp-assign-btn gp-assign-btn--a"
-                  onClick={() => assignPlayer(m, "a")}
+              {unassigned.map((m) => (
+                <motion.div
+                  key={m.key}
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.25, ease: "easeInOut" }}
+                  style={{ overflow: "hidden" }}
                 >
-                  → A
-                </button>
-                <button
-                  className="gp-assign-btn gp-assign-btn--b"
-                  onClick={() => assignPlayer(m, "b")}
-                >
-                  → B
-                </button>
-                </div>
-              </motion.div>
-            ))}
+                  <div className="gp-unassigned-player">
+                    <UserAvatar name={m.name} imageUrl={m.image_url} className="gp-pick-avatar-wrap" fallbackClassName="text-[10px]" />
+                    <span className="gp-unassigned-name">{m.name}</span>
+                    <button
+                      className="gp-assign-btn gp-assign-btn--a"
+                      onClick={() => assignPlayer(m, "a")}
+                    >
+                      → A
+                    </button>
+                    <button
+                      className="gp-assign-btn gp-assign-btn--b"
+                      onClick={() => assignPlayer(m, "b")}
+                    >
+                      → B
+                    </button>
+                  </div>
+                </motion.div>
+              ))}
             </AnimatePresence>
           </div>
         </div>
