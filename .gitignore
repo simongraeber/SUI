@@ -31,6 +31,7 @@ client_secret_*.json
 
 # Private deployment docs (contains credentials)
 PrivateDeplaymnetReadme.md
+SEASONS_PLAN.md
 
 # Docker
 pgdata/
