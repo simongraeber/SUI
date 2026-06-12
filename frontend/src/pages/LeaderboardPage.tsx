@@ -661,13 +661,18 @@ function LeaderboardPage() {
               </>
             )}
             <div className="mt-6 border-t pt-6">
-              <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-                <Gamepad2 className="size-4" />
-                Placement Matches
+              <div className="mb-3 space-y-1">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <Gamepad2 className="size-4" />
+                  Provisional Players
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Please get in a few more games to be ranked.
+                </p>
               </div>
               {placementPlayers.length === 0 ? (
                 <p className="text-center text-muted-foreground italic py-8">
-                  No players are currently in placement matches.
+                  No provisional players right now.
                 </p>
               ) : (
                 <DataTable
@@ -678,15 +683,15 @@ function LeaderboardPage() {
               )}
               {rankedPlayers.length === 0 && placementPlayers.length > 0 && (
                 <p className="text-xs text-muted-foreground mt-3">
-                  <span className="whitespace-nowrap">GP = Games Played</span>{" | "}
-                  <span className="whitespace-nowrap">W = Wins</span>{" | "}
-                  <span className="whitespace-nowrap">L = Losses</span>{" | "}
-                  <span className="whitespace-nowrap">Win% = Win Rate</span>{" | "}
-                  <span className="whitespace-nowrap">GS = Goals Scored</span>{" | "}
-                  <span className="whitespace-nowrap">GC = Goals Conceded</span>{" | "}
+                  <span className="whitespace-nowrap">GP = Games Played</span>{" · "}
+                  <span className="whitespace-nowrap">W = Wins</span>{" · "}
+                  <span className="whitespace-nowrap">L = Losses</span>{" · "}
+                  <span className="whitespace-nowrap">Win% = Win Rate</span>{" · "}
+                  <span className="whitespace-nowrap">GS = Goals Scored</span>{" · "}
+                  <span className="whitespace-nowrap">GC = Goals Conceded</span>{" · "}
                   <span className="whitespace-nowrap">GD = Goal Difference</span>
                   {isPeriod && (
-                    <>{" | "}<span className="whitespace-nowrap">+/- Delta = Elo Change</span></>
+                    <>{" · "}<span className="whitespace-nowrap">±Δ = Elo Change</span></>
                   )}
                 </p>
               )}
