@@ -410,6 +410,19 @@ function LeaderboardPage() {
     [isPeriod, groupId],
   );
 
+  const rankedPlayers = useMemo(
+    () => stats?.players.filter((player) => !player.provisional) ?? [],
+    [stats],
+  );
+  const placementPlayers = useMemo(
+    () => stats?.players.filter((player) => player.provisional) ?? [],
+    [stats],
+  );
+  const defaultSorting = useMemo(
+    () => (isPeriod ? [{ id: "elo_delta", desc: true }] : [{ id: "elo", desc: true }]),
+    [isPeriod],
+  );
+
   if (!loading && !stats) return null;
 
   const showSkeleton = loading;
@@ -622,20 +635,16 @@ function LeaderboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {stats!.players.length === 0 ? (
+            {rankedPlayers.length === 0 ? (
               <p className="text-center text-muted-foreground italic py-8">
-                No data yet. Play some games!
+                No unlocked rankings yet.
               </p>
             ) : (
               <>
                 <DataTable
                   columns={columns}
-                  data={stats!.players}
-                  defaultSorting={
-                    isPeriod
-                      ? [{ id: "elo_delta", desc: true }]
-                      : [{ id: "elo", desc: true }]
-                  }
+                  data={rankedPlayers}
+                  defaultSorting={defaultSorting}
                 />
                 <p className="text-xs text-muted-foreground mt-3">
                   <span className="whitespace-nowrap">GP = Games Played</span>{" · "}
@@ -651,6 +660,42 @@ function LeaderboardPage() {
                 </p>
               </>
             )}
+            <div className="mt-6 border-t pt-6">
+              <div className="mb-3 space-y-1">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <Gamepad2 className="size-4" />
+                  Provisional Players
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Please get in a few more games to be ranked.
+                </p>
+              </div>
+              {placementPlayers.length === 0 ? (
+                <p className="text-center text-muted-foreground italic py-8">
+                  No provisional players right now.
+                </p>
+              ) : (
+                <DataTable
+                  columns={columns}
+                  data={placementPlayers}
+                  defaultSorting={defaultSorting}
+                />
+              )}
+              {rankedPlayers.length === 0 && placementPlayers.length > 0 && (
+                <p className="text-xs text-muted-foreground mt-3">
+                  <span className="whitespace-nowrap">GP = Games Played</span>{" · "}
+                  <span className="whitespace-nowrap">W = Wins</span>{" · "}
+                  <span className="whitespace-nowrap">L = Losses</span>{" · "}
+                  <span className="whitespace-nowrap">Win% = Win Rate</span>{" · "}
+                  <span className="whitespace-nowrap">GS = Goals Scored</span>{" · "}
+                  <span className="whitespace-nowrap">GC = Goals Conceded</span>{" · "}
+                  <span className="whitespace-nowrap">GD = Goal Difference</span>
+                  {isPeriod && (
+                    <>{" · "}<span className="whitespace-nowrap">±Δ = Elo Change</span></>
+                  )}
+                </p>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
