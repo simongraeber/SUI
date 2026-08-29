@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, type ReactNode } from "react";
 import { Sparkles, GripVertical } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -7,6 +7,12 @@ import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import { popIn } from "@/lib/animations";
 import { useAuth } from "@/lib/AuthContext";
 import UserAvatar from "@/components/UserAvatar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import "./GamePage.css";
 import {
   getGroup,
@@ -36,6 +42,7 @@ import friendlyFireSplash from "../assets/LiveGame/friendly-fire-splash.webp";
 import victoryBanner from "../assets/LiveGame/victory-banner.webp";
 import defeatBanner from "../assets/LiveGame/defeat-banner.webp";
 import pauseOverlay from "../assets/LiveGame/pause-overlay.webp";
+import warningOverlay from "../assets/LiveGame/warning-overlay.webp";
 import liveBoardBg from "../assets/LiveGame/live-board-bg.webp";
 import noActiveGameImg from "../assets/no-active-game.webp";
 import gameCancelledImg from "../assets/game-cancelled.webp";
@@ -55,6 +62,48 @@ function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function GameOverlayContent({
+  image,
+  imageAlt,
+  title,
+  detail,
+  description,
+  dialog = false,
+  imageClassName = "",
+  children,
+}: {
+  image: string;
+  imageAlt: string;
+  title: string;
+  detail?: string;
+  description?: string;
+  dialog?: boolean;
+  imageClassName?: string;
+  children: ReactNode;
+}) {
+  return (
+    <>
+      <img src={image} alt={imageAlt} className={`gp-overlay-img ${imageClassName}`} />
+      {dialog ? (
+        <DialogTitle className="gp-overlay-heading">{title}</DialogTitle>
+      ) : (
+        <h2 className="gp-overlay-heading">{title}</h2>
+      )}
+      {detail && <p className="gp-overlay-time">{detail}</p>}
+      {description && (
+        dialog ? (
+          <DialogDescription className="gp-overlay-sub gp-overlay-description">
+            {description}
+          </DialogDescription>
+        ) : (
+          <p className="gp-overlay-sub gp-overlay-description">{description}</p>
+        )
+      )}
+      <div className="gp-overlay-actions">{children}</div>
+    </>
+  );
 }
 
 /** Sort members by last_played_at descending (most recent first), never-played last. */
@@ -189,6 +238,8 @@ function GamePage() {
   const [lastGoalSide, setLastGoalSide] = useState<Side | null>(null);
   const [lastGoalFF, setLastGoalFF] = useState(false);
   const [lastGoalScorer, setLastGoalScorer] = useState<string | null>(null);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [goalKey, setGoalKey] = useState(0);
   const [showAttribution, setShowAttribution] = useState(false);
   const [attrSide, setAttrSide] = useState<Side>("a");
@@ -606,11 +657,15 @@ function GamePage() {
   /* ── cancel game ── */
   const cancelGame = useCallback(async () => {
     if (!gameId) return;
+    setCancelling(true);
     try {
       await patchGame(gameId, { state: "cancelled" });
+      setShowCancelConfirm(false);
       setPhase("cancelled");
     } catch (e) {
       console.error("Failed to cancel game:", e);
+    } finally {
+      setCancelling(false);
     }
   }, [patchGame, gameId]);
 
@@ -1015,7 +1070,7 @@ function GamePage() {
               <motion.button
                 className="gp-topbar-btn gp-topbar-btn--danger"
                 whileTap={{ scale: 0.9 }}
-                onClick={cancelGame}
+                onClick={() => setShowCancelConfirm(true)}
               >
                 ✕ Cancel
               </motion.button>
@@ -1202,6 +1257,36 @@ function GamePage() {
         )}
       </AnimatePresence>
 
+      <Dialog open={showCancelConfirm} onOpenChange={(open) => !cancelling && setShowCancelConfirm(open)}>
+        <DialogContent className="gp-cancel-overlay">
+          <GameOverlayContent
+            image={warningOverlay}
+            imageAlt="Warning"
+            imageClassName="gp-overlay-img--warning"
+            title="Cancel Game?"
+            description="The current game will be discarded. This action cannot be undone."
+            dialog
+          >
+            <button
+              type="button"
+              className="gp-btn gp-btn--primary"
+              disabled={cancelling}
+              onClick={() => setShowCancelConfirm(false)}
+            >
+              Keep Playing
+            </button>
+            <button
+              type="button"
+              className="gp-btn gp-btn--danger"
+              disabled={cancelling}
+              onClick={cancelGame}
+            >
+              {cancelling ? "Cancelling..." : "Cancel Game"}
+            </button>
+          </GameOverlayContent>
+        </DialogContent>
+      </Dialog>
+
       {/* ────── GOAL ATTRIBUTION DIALOG ────── */}
       <AnimatePresence>
         {showAttribution && (
@@ -1306,12 +1391,16 @@ function GamePage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <img src={pauseOverlay} alt="Paused" className="gp-overlay-img" />
-            <h2 className="gp-overlay-heading">Game Paused</h2>
-            <p className="gp-overlay-time">{formatTime(elapsed)}</p>
-            <button className="gp-btn gp-btn--primary" onClick={togglePause}>
-              Resume
-            </button>
+            <GameOverlayContent
+              image={pauseOverlay}
+              imageAlt="Paused"
+              title="Game Paused"
+              detail={formatTime(elapsed)}
+            >
+              <button className="gp-btn gp-btn--primary" onClick={togglePause}>
+                Resume
+              </button>
+            </GameOverlayContent>
           </motion.div>
         )}
       </AnimatePresence>
