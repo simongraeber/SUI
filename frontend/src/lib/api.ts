@@ -230,6 +230,14 @@ export interface GameResponse {
   goals: GameGoal[];
 }
 
+export interface PaginatedGamesResponse {
+  items: GameResponse[];
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+}
+
 export interface GameSummary {
   id: string;
   state: string;
@@ -274,8 +282,19 @@ export async function listGames(groupId: string) {
   return request<GameSummary[]>(`/groups/${groupId}/games`);
 }
 
-export async function listPlayerGames(groupId: string, playerId: string) {
-  return request<GameResponse[]>(`/groups/${groupId}/games/player/${playerId}`);
+export async function listPlayerGames(
+  groupId: string,
+  playerId: string,
+  page = 1,
+  pageSize = 10,
+) {
+  const params = new URLSearchParams({
+    page: String(page),
+    page_size: String(pageSize),
+  });
+  return request<PaginatedGamesResponse>(
+    `/groups/${groupId}/games/player/${playerId}?${params}`,
+  );
 }
 
 export async function recordGoal(

@@ -11,8 +11,9 @@ import UserAvatar from "@/components/UserAvatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Pencil, Shield, Swords, TrendingUp } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Pencil, Shield, Swords, TrendingUp } from "lucide-react";
 import PageTransition from "@/components/PageTransition";
+import GameDetailsDialog from "@/components/GameDetailsDialog";
 import {
   getGroup,
   getGroupStats,
@@ -22,6 +23,8 @@ import {
   type GroupMember,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+
+const GAMES_PER_PAGE = 10;
 
 /* ── Stat row helper ── */
 function StatRow({ label, value, color }: { label: string; value: string | number; color?: string }) {
@@ -33,8 +36,7 @@ function StatRow({ label, value, color }: { label: string; value: string | numbe
   );
 }
 
-function MemberPage() {
-  const { groupId, memberId: userId } = useParams<{ groupId: string; memberId: string }>();
+function MemberPageContent({ groupId, userId }: { groupId?: string; userId?: string }) {
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
   const isOwnProfile = currentUser?.id === userId;
@@ -42,26 +44,75 @@ function MemberPage() {
   const [member, setMember] = useState<GroupMember | null>(null);
   const [games, setGames] = useState<GameResponse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [gamesLoading, setGamesLoading] = useState(true);
+  const [gamesError, setGamesError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalGames, setTotalGames] = useState(0);
+  const [selectedGame, setSelectedGame] = useState<GameResponse | null>(null);
 
   useEffect(() => {
     if (!groupId || !userId) return;
 
+    let cancelled = false;
+
     Promise.all([
       getGroup(groupId),
       getGroupStats(groupId),
-      listPlayerGames(groupId, userId),
     ])
-      .then(([group, stats, playerGames]) => {
+      .then(([group, stats]) => {
+        if (cancelled) return;
         const found = stats.players.find((p) => p.user_id === userId);
         setPlayer(found ?? null);
         setMember(group.members.find((m) => m.user_id === userId) ?? null);
-        setGames(playerGames);
       })
-      .catch(() => navigate(`/group/${groupId}`, { replace: true }))
-      .finally(() => setLoading(false));
+      .catch(() => {
+        if (!cancelled) navigate(`/group/${groupId}`, { replace: true });
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [groupId, userId, navigate]);
 
-  if (loading) {
+  useEffect(() => {
+    if (!groupId || !userId) return;
+
+    let cancelled = false;
+
+    listPlayerGames(groupId, userId, currentPage, GAMES_PER_PAGE)
+      .then((response) => {
+        if (cancelled) return;
+        setGames(response.items);
+        setTotalGames(response.total);
+        setTotalPages(response.total_pages);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setGames([]);
+        setGamesError("Games could not be loaded. Please try again.");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setGamesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [groupId, userId, currentPage]);
+
+  const goToGamesPage = (page: number) => {
+    setSelectedGame(null);
+    setGamesLoading(true);
+    setGamesError(null);
+    setCurrentPage(page);
+  };
+
+  if (loading || (gamesLoading && games.length === 0 && !gamesError)) {
     return (
       <PageTransition className="max-w-lg mx-auto px-4 py-8">
         <Link to={`/group/${groupId}`} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4">
@@ -255,16 +306,27 @@ function MemberPage() {
       </Card>
 
       {/* ── Recent games ── */}
-      {games.length > 0 && (
+      {(games.length > 0 || gamesError) && (
         <Card className="mb-6">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <Swords className="size-4" />
               Recent Games
+              {totalGames > 0 && (
+                <span className="ml-auto text-xs font-normal text-muted-foreground">
+                  {totalGames} total
+                </span>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <ul className="space-y-2">
+            {gamesError && (
+              <p className="py-4 text-center text-sm text-destructive">{gamesError}</p>
+            )}
+            <ul
+              className={`space-y-2 transition-opacity ${gamesLoading ? "pointer-events-none opacity-60" : ""}`}
+              aria-busy={gamesLoading}
+            >
               {games.map((game) => {
                 const playerSide = game.players.find(
                   (p) => p.user_id === userId,
@@ -296,41 +358,93 @@ function MemberPage() {
                 });
 
                 return (
-                  <li
-                    key={game.id}
-                    className="flex items-center gap-3 rounded-md border px-3 py-2 text-sm"
-                  >
-                    <span
-                      className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${resultColor}`}
+                  <li key={game.id}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedGame(game)}
+                      className="flex w-full cursor-pointer items-center gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      aria-label={`View game details: ${playerScore} to ${opponentScore} on ${date}`}
                     >
-                      {resultLabel}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium">
-                        {playerScore} – {opponentScore}
-                        {playerGoals > 0 && (
-                          <span className="text-muted-foreground font-normal ml-1.5">
-                            ({playerGoals} goal{playerGoals !== 1 ? "s" : ""})
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {teammates.length > 0 ? `with ${teammates.join(", ")} ` : ""}
-                        vs {opponents.join(", ")}
-                      </p>
-                    </div>
-                    <span className="text-xs text-muted-foreground shrink-0">
-                      {date}
-                    </span>
+                      <span
+                        className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${resultColor}`}
+                      >
+                        {resultLabel}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium">
+                          {playerScore} – {opponentScore}
+                          {playerGoals > 0 && (
+                            <span className="text-muted-foreground font-normal ml-1.5">
+                              ({playerGoals} goal{playerGoals !== 1 ? "s" : ""})
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {teammates.length > 0 ? `with ${teammates.join(", ")} ` : ""}
+                          vs {opponents.join(", ")}
+                        </p>
+                      </div>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {date}
+                      </span>
+                    </button>
                   </li>
                 );
               })}
             </ul>
+            {totalPages > 1 && (
+              <div className="mt-4 flex items-center justify-between border-t pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  disabled={currentPage === 1 || gamesLoading}
+                  onClick={() => goToGamesPage(currentPage - 1)}
+                  aria-label="Previous games page"
+                  title="Previous page"
+                >
+                  <ChevronLeft />
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  disabled={currentPage === totalPages || gamesLoading}
+                  onClick={() => goToGamesPage(currentPage + 1)}
+                  aria-label="Next games page"
+                  title="Next page"
+                >
+                  <ChevronRight />
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
 
+      <GameDetailsDialog
+        game={selectedGame}
+        onOpenChange={(open) => {
+          if (!open) setSelectedGame(null);
+        }}
+      />
+
     </PageTransition>
+  );
+}
+
+function MemberPage() {
+  const { groupId, memberId: userId } = useParams<{ groupId: string; memberId: string }>();
+
+  return (
+    <MemberPageContent
+      key={`${groupId ?? ""}:${userId ?? ""}`}
+      groupId={groupId}
+      userId={userId}
+    />
   );
 }
 

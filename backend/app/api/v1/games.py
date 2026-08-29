@@ -1,7 +1,7 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -13,6 +13,7 @@ from app.models.user import User
 from app.schemas.game import (
     GameCreate,
     GameGoalCreate,
+    PaginatedGamesResponse,
     GameResponse,
     GameSummary,
     GameUpdate,
@@ -109,14 +110,16 @@ async def list_games(
     ]
 
 
-@router.get("/player/{player_id}", response_model=list[GameResponse])
+@router.get("/player/{player_id}", response_model=PaginatedGamesResponse)
 async def list_player_games(
     group_id: uuid.UUID,
     player_id: uuid.UUID,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=50),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List recent completed games for a specific player in a group."""
+    """List completed games for a specific player in a group."""
     await assert_group_membership(group_id, user, db)
 
     # Find game IDs where this player participated
@@ -124,19 +127,33 @@ async def list_player_games(
         GamePlayer.user_id == player_id
     ).scalar_subquery()
 
+    game_filters = (
+        Game.group_id == group_id,
+        Game.state == "completed",
+        Game.id.in_(player_game_ids),
+    )
+
+    total_result = await db.execute(
+        select(func.count()).select_from(Game).where(*game_filters)
+    )
+    total = total_result.scalar_one()
+
     result = await db.execute(
         select(Game)
         .options(selectinload(Game.players), selectinload(Game.goals))
-        .where(
-            Game.group_id == group_id,
-            Game.state == "completed",
-            Game.id.in_(player_game_ids),
-        )
-        .order_by(Game.created_at.desc())
-        .limit(20)
+        .where(*game_filters)
+        .order_by(Game.created_at.desc(), Game.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
     )
     games = result.scalars().all()
-    return [build_game_response(g) for g in games]
+    return PaginatedGamesResponse(
+        items=[build_game_response(g) for g in games],
+        page=page,
+        page_size=page_size,
+        total=total,
+        total_pages=(total + page_size - 1) // page_size,
+    )
 
 
 @router.get("/active", response_model=GameResponse | None)

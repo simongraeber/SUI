@@ -70,6 +70,14 @@ class GameResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class PaginatedGamesResponse(BaseModel):
+    items: list[GameResponse]
+    page: int
+    page_size: int
+    total: int
+    total_pages: int
+
+
 class GameSummary(BaseModel):
     """Lightweight game summary for list endpoints."""
     id: UUID

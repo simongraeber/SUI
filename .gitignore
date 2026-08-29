@@ -36,6 +36,7 @@ SEASONS_PLAN.md
 
 # Docker
 pgdata/
+backups/*.dump
 
 # Misc
 *.log
