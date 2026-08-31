@@ -154,12 +154,11 @@ function GroupPage() {
                         startTransition(() => navigate(`/group/${groupId}/member/${m.user_id}`));
                       }}
                       aria-label={`View profile of ${m.name}`}
-                      className={`flex w-full items-center gap-3 rounded-md border px-3 py-2 hover:bg-muted/50 transition-colors cursor-pointer ${isNavigating ? "animate-pulse" : ""}`}
+                      className={`flex w-full items-center gap-4 rounded-md border px-4 py-3 hover:bg-muted/50 transition-colors cursor-pointer ${isNavigating ? "animate-pulse" : ""}`}
                     >
-                      <UserAvatar name={m.name} imageUrl={m.image_url} className="h-8 w-8" fallbackClassName="text-xs" />
+                      <UserAvatar name={m.name} imageUrl={m.image_url} className="h-10 w-10" fallbackClassName="text-sm" />
                       <div className="text-left flex-1 min-w-0">
-                        <p className="font-medium truncate">{m.name}</p>
-                        <p className="text-xs text-muted-foreground truncate">{m.email}</p>
+                        <p className="text-base font-medium truncate">{m.name}</p>
                       </div>
                       {m.user_id === group.created_by && (
                         <Badge variant="secondary" className="text-xs">
