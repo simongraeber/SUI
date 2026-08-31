@@ -49,6 +49,7 @@ import {
 /* ── Time period helpers ── */
 type PeriodKey =
   | "all"
+  | "today"
   | "this_week"
   | "this_month"
   | "last_30"
@@ -56,6 +57,7 @@ type PeriodKey =
 
 const PERIOD_OPTIONS: { key: PeriodKey; label: string }[] = [
   { key: "all", label: "All Time" },
+  { key: "today", label: "Today" },
   { key: "this_week", label: "This Week" },
   { key: "this_month", label: "This Month" },
   { key: "last_30", label: "30 Days" },
@@ -71,6 +73,10 @@ function getDateRange(key: PeriodKey): {
   let start: Date;
 
   switch (key) {
+    case "today":
+      start = new Date(now);
+      start.setHours(0, 0, 0, 0);
+      break;
     case "this_week": {
       const day = now.getDay();
       const diff = day === 0 ? 6 : day - 1; // Monday = 0
