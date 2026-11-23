@@ -32,7 +32,7 @@ services:
       - images:/data/images
       - team_images:/data/team_images
     ports:
-      - "8002:8000"
+      - "127.0.0.1:8002:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -45,7 +45,7 @@ services:
         VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
     container_name: siu-frontend
     ports:
-      - "3002:80"
+      - "127.0.0.1:3002:80"
     depends_on:
       - backend
     restart: unless-stopped
